@@ -1,4 +1,4 @@
-"""Street-level incident map — Google Maps when keyed, else OpenStreetMap Folium."""
+"""Street-level incident map — Google Maps when keyed, else light Carto Positron Folium."""
 
 from __future__ import annotations
 
@@ -11,13 +11,15 @@ import streamlit.components.v1 as components
 from streamlit_folium import st_folium
 
 from geo_services import google_maps_api_key
+from styles import chart_colors
 
+_COLORS = chart_colors()
 SEVERITY_COLOR = {
-    "low": "#2ecc71",
-    "medium": "#e8a317",
-    "high": "#e67e22",
-    "critical": "#c0392b",
-    "resolved": "#95a5a6",
+    "low": _COLORS["low"],
+    "medium": _COLORS["medium"],
+    "high": _COLORS["high"],
+    "critical": _COLORS["critical"],
+    "resolved": _COLORS["resolved"],
 }
 
 
@@ -31,7 +33,7 @@ def _center(rows: list[dict[str, Any]]) -> tuple[float, float]:
 
 
 def render_incident_map(rows: list[dict[str, Any]], *, height: int = 560) -> None:
-    """Draw a Google-Maps-like street basemap with hazard markers."""
+    """Draw a street basemap with hazard markers (same API as before)."""
     if not rows:
         st.info("No pins to show.")
         return
@@ -41,7 +43,7 @@ def render_incident_map(rows: list[dict[str, Any]], *, height: int = 560) -> Non
         _google_maps(rows, key, height=height)
     else:
         st.caption(
-            "Street map via OpenStreetMap. Add `GOOGLE_MAPS_API_KEY` to `.env` "
+            "Street map via a light basemap. Add `GOOGLE_MAPS_API_KEY` to `.env` "
             "for the full Google Maps experience (streets, satellite, Street View)."
         )
         _folium_streets(rows, height=height)
@@ -49,10 +51,21 @@ def render_incident_map(rows: list[dict[str, Any]], *, height: int = 560) -> Non
 
 def _folium_streets(rows: list[dict[str, Any]], *, height: int) -> None:
     lat, lon = _center(rows)
-    m = folium.Map(location=[lat, lon], zoom_start=13, control_scale=True)
+    m = folium.Map(
+        location=[lat, lon],
+        zoom_start=13,
+        control_scale=True,
+        tiles=None,
+    )
 
-    # Familiar street basemap (OSM) + optional satellite
-    folium.TileLayer("OpenStreetMap", name="Streets").add_to(m)
+    # Light, minimal basemap (Carto Positron)
+    folium.TileLayer(
+        tiles="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+        attr='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> '
+        '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+        name="Light streets",
+        max_zoom=20,
+    ).add_to(m)
     folium.TileLayer(
         tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
         attr="Esri",
@@ -61,23 +74,25 @@ def _folium_streets(rows: list[dict[str, Any]], *, height: int) -> None:
         control=True,
     ).add_to(m)
 
+    accent = _COLORS["accent"]
     for r in rows:
         color = (
             SEVERITY_COLOR["resolved"]
             if r.get("status") == "resolved"
-            else SEVERITY_COLOR.get(str(r.get("severity", "medium")), "#e8a317")
+            else SEVERITY_COLOR.get(str(r.get("severity", "medium")), _COLORS["medium"])
         )
         popup = (
+            f"<div style='font-family:Inter,system-ui,sans-serif;font-size:13px'>"
             f"<b>#{r['id']} · {r.get('hazard_type', '')}</b><br/>"
             f"{r.get('severity', '')} · {r.get('status', '')}<br/>"
             f"{r.get('location', '')}<br/>"
-            f"<small>{r.get('created_at', '')}</small>"
+            f"<small style='color:#5F6368'>{r.get('created_at', '')}</small></div>"
         )
         folium.CircleMarker(
             location=[float(r["latitude"]), float(r["longitude"])],
             radius=9,
-            color="#12141a",
-            weight=1,
+            color=accent,
+            weight=1.5,
             fill=True,
             fill_color=color,
             fill_opacity=0.92,
@@ -85,7 +100,7 @@ def _folium_streets(rows: list[dict[str, Any]], *, height: int) -> None:
             tooltip=f"#{r['id']} {r.get('hazard_type', '')}",
         ).add_to(m)
 
-    folium.LayerControl(collapsed=False).add_to(m)
+    folium.LayerControl(collapsed=True).add_to(m)
     st_folium(m, width=None, height=height, returned_objects=[])
 
 
@@ -96,7 +111,7 @@ def _google_maps(rows: list[dict[str, Any]], api_key: str, *, height: int) -> No
         color = (
             SEVERITY_COLOR["resolved"]
             if r.get("status") == "resolved"
-            else SEVERITY_COLOR.get(str(r.get("severity", "medium")), "#e8a317")
+            else SEVERITY_COLOR.get(str(r.get("severity", "medium")), _COLORS["medium"])
         )
         markers.append(
             {
@@ -114,6 +129,7 @@ def _google_maps(rows: list[dict[str, Any]], api_key: str, *, height: int) -> No
         )
 
     markers_json = json.dumps(markers)
+    accent = _COLORS["accent"]
     html = f"""
 <!DOCTYPE html>
 <html>
@@ -121,11 +137,11 @@ def _google_maps(rows: list[dict[str, Any]], api_key: str, *, height: int) -> No
   <meta charset="utf-8" />
   <style>
     html, body, #map {{ margin: 0; padding: 0; height: 100%; width: 100%; }}
-    .gm-style .gm-style-iw-c {{ border-radius: 2px; }}
+    .gm-style .gm-style-iw-c {{ border-radius: 14px; }}
   </style>
 </head>
 <body>
-  <div id="map" style="height:{height}px;width:100%;"></div>
+  <div id="map" style="height:{height}px;width:100%;border-radius:18px;overflow:hidden;"></div>
   <script>
     const MARKERS = {markers_json};
     function initMap() {{
@@ -137,6 +153,15 @@ def _google_maps(rows: list[dict[str, Any]], api_key: str, *, height: int) -> No
         fullscreenControl: true,
         zoomControl: true,
         gestureHandling: "greedy",
+        styles: [
+          {{ elementType: "geometry", stylers: [{{ color: "#f8f9fb" }}] }},
+          {{ elementType: "labels.text.fill", stylers: [{{ color: "#5f6368" }}] }},
+          {{ elementType: "labels.text.stroke", stylers: [{{ color: "#ffffff" }}] }},
+          {{ featureType: "poi", stylers: [{{ visibility: "simplified" }}] }},
+          {{ featureType: "road", elementType: "geometry", stylers: [{{ color: "#ffffff" }}] }},
+          {{ featureType: "road", elementType: "geometry.stroke", stylers: [{{ color: "#e8eaed" }}] }},
+          {{ featureType: "water", elementType: "geometry", stylers: [{{ color: "#e8f0fe" }}] }}
+        ]
       }});
       const bounds = new google.maps.LatLngBounds();
       MARKERS.forEach((m) => {{
@@ -151,14 +176,14 @@ def _google_maps(rows: list[dict[str, Any]], api_key: str, *, height: int) -> No
             scale: 10,
             fillColor: m.color,
             fillOpacity: 0.95,
-            strokeColor: "#12141a",
+            strokeColor: "{accent}",
             strokeWeight: 1.5,
           }},
         }});
         const info = new google.maps.InfoWindow({{
-          content: `<div style="font-family:system-ui,sans-serif;max-width:240px">
+          content: `<div style="font-family:Inter,system-ui,sans-serif;max-width:240px;font-size:13px">
             <strong>${{m.title}}</strong><br/>
-            <span style="white-space:pre-line">${{m.body}}</span></div>`,
+            <span style="white-space:pre-line;color:#5f6368">${{m.body}}</span></div>`,
         }});
         marker.addListener("click", () => info.open({{ map, anchor: marker }}));
       }});

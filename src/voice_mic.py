@@ -23,13 +23,18 @@ def browser_mic_panel(*, key: str = "mic") -> None:
         f"""
         <div style="font-family: system-ui, sans-serif; padding: 0.25rem 0;">
           <button id="up-mic-{key}" style="
-            padding: 0.55rem 1rem; border-radius: 8px; border: 1px solid #334;
-            background: #1b2a4a; color: #f4f6fb; font-weight: 600; cursor: pointer;
+            padding: 0.5rem 1.15rem; border-radius: 999px; border: none;
+            background: #1A73E8; color: #fff; font-weight: 600; cursor: pointer;
+            font-family: Inter, system-ui, sans-serif; font-size: 0.95rem;
+            box-shadow: 0 1px 3px rgba(26,115,232,0.35);
+            transition: background 160ms ease;
           ">Speak</button>
-          <span id="up-mic-status-{key}" style="margin-left:0.6rem;color:#667;"></span>
+          <span id="up-mic-status-{key}" style="margin-left:0.6rem;color:#5F6368;font-family:Inter,system-ui,sans-serif;font-size:0.9rem;"></span>
           <textarea id="up-mic-out-{key}" rows="2" style="
-            width:100%; margin-top:0.5rem; padding:0.5rem; border-radius:8px;
-            border:1px solid #ccd; font-size: 0.95rem;
+            width:100%; margin-top:0.65rem; padding:0.65rem 0.75rem; border-radius:12px;
+            border:1px solid rgba(32,33,36,0.1); font-size: 0.95rem;
+            font-family: Inter, system-ui, sans-serif; color: #202124;
+            background: #fff; box-sizing: border-box;
           " placeholder="Your spoken words appear here — copy into the chat box below."></textarea>
         </div>
         <script>
