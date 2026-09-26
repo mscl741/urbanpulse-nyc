@@ -1,0 +1,7 @@
+.venv/
+.env
+*.pyc
+.DS_Store
+.streamlit/secrets.toml
+urbanpulse.db
+data/outbound_mail/
