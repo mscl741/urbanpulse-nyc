@@ -22,9 +22,7 @@ from models import (
 def _client() -> OpenAI:
     api_key = os.getenv("XAI_API_KEY")
     if not api_key:
-        raise RuntimeError(
-            "XAI_API_KEY is not set. Add it to .env or enable Mock mode."
-        )
+        raise RuntimeError("Photo review is temporarily unavailable. Please try again later.")
     return OpenAI(api_key=api_key, base_url="https://api.x.ai/v1")
 
 

@@ -21,7 +21,7 @@ from grok_client import mock_analyze
 def _gemini_key() -> str:
     key = (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
     if not key or key.startswith("your_"):
-        raise RuntimeError("GEMINI_API_KEY is not set. Add it to .env or enable Mock mode.")
+        raise RuntimeError("Photo review is temporarily unavailable. Please try again later.")
     return key
 
 

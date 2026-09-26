@@ -100,42 +100,31 @@ def _boot() -> None:
 
 
 def settings_rail() -> tuple[bool, str]:
-    has_grok = bool(
-        os.getenv("XAI_API_KEY") and not os.getenv("XAI_API_KEY", "").startswith("your_")
+    """Sidebar: public-friendly controls only (no API/vendor jargon)."""
+    has_cloud = bool(
+        (
+            os.getenv("XAI_API_KEY")
+            and not os.getenv("XAI_API_KEY", "").startswith("your_")
+        )
+        or (
+            (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
+            and not (os.getenv("GEMINI_API_KEY") or "").startswith("your_")
+        )
     )
-    has_gemini = bool(
-        (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
-        and not (os.getenv("GEMINI_API_KEY") or "").startswith("your_")
-    )
+    # Demo mode is automatic when no cloud keys are configured — never shown in UI.
+    use_mock = not has_cloud
+    model = os.getenv("GROK_MODEL", "grok-4.7")
+
     with st.sidebar:
         st.markdown("### UrbanPulse")
-        st.caption("Hack the City · DivHacks")
-
-        st.markdown("#### AI engine")
-        provider = get_provider()
-        st.caption(
-            f"Active: **{provider.upper()}** · set in `.env` via `ACTIVE_AI` "
-            f"(comment out the line you don’t want) · "
-            f"Grok key {'✓' if has_grok else '✗'} · Gemini key {'✓' if has_gemini else '✗'}"
-        )
-
-        use_mock = st.toggle(
-            "Mock AI (no cloud vision/chat)",
-            value=not (has_grok or has_gemini),
-            help="Offline demo replies. Turn off when API keys are set.",
-        )
-        model = st.text_input(
-            "Grok chat/vision model",
-            value=os.getenv("GROK_MODEL", "grok-4.7"),
-            disabled=use_mock or provider != "grok",
-        )
+        st.caption("Civic reporting for New York")
 
         st.markdown("#### Accessibility")
         st.toggle(
             "Enable voice services",
             value=st.session_state.get("a11y_voice_master", False),
             key="a11y_voice_master",
-            help="Master switch (OFF by default). When on, TTS can speak report results, GrokBot, and near-me scans.",
+            help="When on, the app can read report results, Hazard Helper replies, and near-me scans aloud.",
         )
         voice_on = bool(st.session_state.get("a11y_voice_master", False))
         st.toggle(
@@ -145,7 +134,7 @@ def settings_rail() -> tuple[bool, str]:
             disabled=not voice_on,
         )
         st.toggle(
-            "Speak GrokBot replies",
+            "Speak Hazard Helper replies",
             value=st.session_state.get("a11y_voice_chat", True),
             key="a11y_voice_chat",
             disabled=not voice_on,
@@ -158,11 +147,11 @@ def settings_rail() -> tuple[bool, str]:
             help="Also used for spoken flood / open-hazard zone alerts.",
         )
         st.toggle(
-            "Browser voice only",
+            "Use phone voice only",
             value=st.session_state.get("a11y_browser_backup", False),
             key="a11y_browser_backup",
             disabled=not voice_on,
-            help="Use the phone’s built-in speech only (no cloud TTS).",
+            help="Prefer your device’s built-in speech.",
         )
         if not voice_on:
             st.caption("Voice is off — nothing will be read aloud until you enable it.")
@@ -170,8 +159,8 @@ def settings_rail() -> tuple[bool, str]:
         status = db_status()
         if status.get("ok"):
             st.caption(
-                f"{status.get('backend')} · {status.get('open_count', 0)} open / "
-                f"{status.get('report_count', 0)} total"
+                f"{status.get('open_count', 0)} open hazards · "
+                f"{status.get('report_count', 0)} total reports"
             )
         st.divider()
     return use_mock, model
@@ -275,9 +264,7 @@ def location_picker(*, use_mock: bool = False, key_prefix: str = "report") -> tu
     consented = location_consent_controls(key_prefix=key_prefix)
     st.caption(
         "On your phone: allow location below, then tap **Share my location**. "
-        "We pull GPS once and resolve the address quickly "
-        + ("(Google)" if google_maps_api_key() else "(add GOOGLE_MAPS_API_KEY for Google addresses)")
-        + "."
+        "We pull GPS once and resolve a nearby address for your report."
     )
 
     st.markdown("**1 · Share my exact location**")
@@ -452,7 +439,7 @@ def render_ticket(
     with m1:
         st.link_button("Open in email app", mailto_url(draft), use_container_width=True)
     with m2:
-        if st.button("Mock send (log only)", type="primary", use_container_width=True, key=f"mock_{report_id}"):
+        if st.button("Send notification (demo)", type="primary", use_container_width=True, key=f"mock_{report_id}"):
             try:
                 result = mock_send(draft)
                 if report_id is not None:
@@ -462,8 +449,8 @@ def render_ticket(
                         method=result["method"],
                     )
                 st.success(f"Logged → {result['log_file']}")
-            except Exception as exc:  # noqa: BLE001
-                st.error(str(exc))
+            except Exception:  # noqa: BLE001
+                st.error("Couldn’t send that notification right now. The report is still saved.")
 
 
 def find_duplicate(
@@ -546,7 +533,7 @@ def render_home() -> None:
     with c:
         st.page_link(page_safety, label="Near-me scan & safety", icon="♿")
     with d:
-        st.page_link(page_bot, label="Ask GrokBot", icon="🤖")
+        st.page_link(page_bot, label="Ask Hazard Helper", icon="💬")
 
     st.markdown("### How it works")
     x, y, z = st.columns(3)
@@ -554,10 +541,10 @@ def render_home() -> None:
         "**1 · Capture**\n\nPhoto + optional GPS (you choose location sharing) or any NYC neighborhood."
     )
     y.markdown(
-        "**2 · Classify + optional voice**\n\nGrok or Gemini scans photos. Enable voice services only if you want TTS."
+        "**2 · Classify + optional voice**\n\nWe review the photo and help route it. Enable voice if you want results read aloud."
     )
     z.markdown(
-        "**3 · Scan + chat**\n\nNear-me hazard scan, GrokBot with Speak + photo filing, flood alerts."
+        "**3 · Scan + chat**\n\nNear-me hazard scan, Hazard Helper with Speak + photo filing, flood alerts."
     )
 
     status = db_status()
@@ -574,8 +561,7 @@ def render_report() -> None:
     st.markdown("## Report a hazard")
     st.caption(
         "Potholes, flooding, signals, dumping, scaffolding, trees, **defective curb cuts / "
-        "pedestrian ramps** — any street or accessibility issue counts. "
-        f"Vision engine: **{provider.upper()}** (switch `ACTIVE_AI` in `.env`)."
+        "pedestrian ramps** — any street or accessibility issue counts."
     )
 
     uploaded = st.file_uploader("Hazard photo", type=["jpg", "jpeg", "png", "webp"])
@@ -638,8 +624,7 @@ def render_report() -> None:
         st.page_link(page_map, label="Show on live map", icon="🗺️")
         return
 
-    engine = provider.upper() if not use_mock else "Mock"
-    with st.spinner(f"{engine} is classifying…" if not use_mock else "Mock classifier…"):
+    with st.spinner("Reviewing your photo…" if not use_mock else "Preparing a demo classification…"):
         try:
             ticket = analyze_hazard_routed(
                 image_bytes,
@@ -650,8 +635,10 @@ def render_report() -> None:
                 use_mock=use_mock,
                 filename=uploaded.name,
             )
-        except Exception as exc:  # noqa: BLE001
-            st.error(f"Analysis failed: {exc}")
+        except Exception:  # noqa: BLE001
+            st.error(
+                "We couldn’t review that photo right now. Please try again in a moment."
+            )
             return
 
     if not ticket.is_recognized_hazard():
@@ -680,8 +667,8 @@ def render_report() -> None:
         )
         path = save_report_image(report_id, image_bytes, mime=mime)
         attach_image(report_id, path, digest)
-    except Exception as exc:  # noqa: BLE001
-        st.error(f"Save failed: {exc}")
+    except Exception:  # noqa: BLE001
+        st.error("Couldn’t save that report right now. Please try again in a moment.")
         return
 
     st.success(f"Filed as open report #{report_id} — pinned on the live map.")
@@ -777,8 +764,7 @@ def render_safety() -> None:
     location_consent_controls(key_prefix="safety")
     st.caption(
         f"Voice services: **{'on' if voice_services_enabled() else 'off'}** · "
-        f"Near-me speech: **{'on' if voice_for_scan() else 'off'}** · "
-        f"TTS engine: **{get_provider().upper()}**"
+        f"Near-me speech: **{'on' if voice_for_scan() else 'off'}**"
     )
 
     gps = st.session_state.get("gps")
@@ -992,8 +978,8 @@ def render_safety() -> None:
     )
     st.markdown(
         "- On **Report**, upload a photo of a damaged / missing curb cut.  \n"
-        "- Active AI (Grok or Gemini) labels **defective pedestrian ramp / curb cut** → **DOT**.  \n"
-        "- Mock tip: name a file like `curb_ramp.jpg` to demo without an API key."
+        "- UrbanPulse labels **defective pedestrian ramp / curb cut** and routes it to **DOT**.  \n"
+        "- Tip: in demo mode, name a file like `curb_ramp.jpg` to try the category."
     )
     st.page_link(page_report, label="Report a curb cut or other hazard", icon="📷")
 
@@ -1072,25 +1058,29 @@ def render_grokbot() -> None:
     _boot()
     use_mock, model = settings_rail()
     provider = get_provider()
-    st.markdown("## GrokBot")
+    st.markdown("## Hazard Helper")
     st.caption(
-        f"Ask questions, attach a hazard photo to file an issue, or use **Speak** for voice input. "
-        f"Engine: **{provider.upper()}**. Replies are spoken only if you enable voice services."
+        "Ask questions, attach a hazard photo to file an issue, or use **Speak** for voice input. "
+        "Replies are spoken only if you enable voice services in the sidebar."
+    )
+
+    helper_hello = (
+        "Hi — I'm **Hazard Helper**. Ask about reporting, the map, flood alerts, or "
+        "attach a photo and say something like "
+        "“Log this issue at Broadway & 125th in Manhattan.” "
+        "If the photo isn’t a street hazard (sunset, selfie, etc.), I’ll say so "
+        "and ask if you have another issue. Voice is **opt-in** in the sidebar."
     )
 
     if "grokbot_messages" not in st.session_state:
         st.session_state["grokbot_messages"] = [
-            {
-                "role": "assistant",
-                "content": (
-                    "Hi — I'm **GrokBot**. Ask about reporting, the map, flood alerts, or "
-                    "attach a photo and say something like "
-                    "“Log this issue at Broadway & 125th in Manhattan.” "
-                    "If the photo isn’t a street hazard (sunset, selfie, etc.), I’ll say so "
-                    "and ask if you have another issue. Voice is **opt-in** in the sidebar."
-                ),
-            }
+            {"role": "assistant", "content": helper_hello}
         ]
+    else:
+        # Migrate older greetings that still say GrokBot
+        msgs = st.session_state["grokbot_messages"]
+        if msgs and "GrokBot" in (msgs[0].get("content") or ""):
+            msgs[0]["content"] = helper_hello
 
     for msg in st.session_state["grokbot_messages"]:
         with st.chat_message(msg["role"]):
@@ -1100,7 +1090,7 @@ def render_grokbot() -> None:
 
     st.markdown("#### Attach photo + location (optional — for filing)")
     bot_img = st.file_uploader(
-        "Hazard photo for GrokBot",
+        "Hazard photo",
         type=["jpg", "jpeg", "png", "webp"],
         key="grokbot_image",
     )
@@ -1113,7 +1103,7 @@ def render_grokbot() -> None:
         placeholder="e.g. Broadway & W 125th St, Manhattan",
     )
 
-    st.markdown("#### Speak to GrokBot")
+    st.markdown("#### Speak to Hazard Helper")
     st.caption(
         "Tap **Speak**, allow the mic, then paste/copy the transcript into the box "
         "(or type). On phones you can also use the keyboard mic in chat."
@@ -1127,7 +1117,7 @@ def render_grokbot() -> None:
 
     audio_clip = None
     if hasattr(st, "audio_input"):
-        audio_clip = st.audio_input("Or record a short voice note (Gemini can transcribe)")
+        audio_clip = st.audio_input("Or record a short voice note")
 
     suggestions = [
         "How do I report a broken curb cut?",
@@ -1147,7 +1137,7 @@ def render_grokbot() -> None:
         f"Speak replies: **{'on' if voice_for_chat() else 'off'}**"
     )
 
-    prompt = st.session_state.pop("grokbot_tip", None) or st.chat_input("Ask GrokBot…")
+    prompt = st.session_state.pop("grokbot_tip", None) or st.chat_input("Ask Hazard Helper…")
     if voice_box and st.button("Send voice / typed instruction", type="primary"):
         prompt = voice_box
 
@@ -1163,7 +1153,7 @@ def render_grokbot() -> None:
             st.session_state["voice_transcript_box"] = transcript
         else:
             st.warning(
-                "Could not transcribe (try **Speak** + paste, or switch ACTIVE_AI to gemini for recordings)."
+                "Could not transcribe that recording. Try **Speak** and paste the text, or type your message."
             )
 
     if prompt:
@@ -1187,10 +1177,8 @@ def render_grokbot() -> None:
                 st.image(image_bytes, width=280)
 
         with st.chat_message("assistant"):
-            label = provider.upper() if not use_mock else "Mock"
-            with st.spinner(f"{label} GrokBot is thinking…"):
+            with st.spinner("Hazard Helper is thinking…"):
                 try:
-                    # Attached photo → vision classify; file only if recognized hazard
                     if image_bytes:
                         loc = (bot_location or "").strip() or "NYC (location not specified)"
                         reply = _grokbot_file_from_image(
@@ -1210,7 +1198,7 @@ def render_grokbot() -> None:
                             reply = (
                                 "I can scan nearby hazards once you share a location pin "
                                 "(Report or Safety → location sharing / home area). "
-                                "Or open **Safety & alerts** and tap **Run near-me scan**."
+                                "Or open **Near-me & safety** and tap **Run near-me scan**."
                             )
                         else:
                             result = scan_nearby_hazards(
@@ -1232,16 +1220,16 @@ def render_grokbot() -> None:
                             use_mock=use_mock,
                             model=model,
                         )
-                except Exception as exc:  # noqa: BLE001
+                except Exception:  # noqa: BLE001
                     reply = (
-                        f"I hit an error talking to {provider}: `{exc}`\n\n"
-                        "Check API keys in `.env`, or turn **Mock AI** on in the sidebar."
+                        "Sorry — I couldn’t finish that just now. "
+                        "Please try again in a moment, or use **Report** to file a photo directly."
                     )
                 st.markdown(reply)
                 st.session_state.pop("_tts_spoken_ids", None)
                 _maybe_speak(reply, use_mock=use_mock, feature="chat")
                 if voice_services_enabled() and not voice_for_chat():
-                    st.caption("Enable **Speak GrokBot replies** under voice services to hear answers.")
+                    st.caption("Enable **Speak Hazard Helper replies** under voice services to hear answers.")
                 elif not voice_services_enabled():
                     if st.button("Read this reply aloud once"):
                         st.session_state["a11y_voice_master"] = True
@@ -1278,7 +1266,7 @@ page_home = st.Page(render_home, title="Home", icon="🏠", default=True)
 page_report = st.Page(render_report, title="Report", icon="📷")
 page_map = st.Page(render_map, title="Live map", icon="🗺️")
 page_safety = st.Page(render_safety, title="Near-me & safety", icon="♿")
-page_bot = st.Page(render_grokbot, title="GrokBot", icon="🤖")
+page_bot = st.Page(render_grokbot, title="Hazard Helper", icon="🛟")
 page_ops = st.Page(render_ops, title="Ops", icon="📊")
 
 

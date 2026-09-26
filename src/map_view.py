@@ -42,10 +42,7 @@ def render_incident_map(rows: list[dict[str, Any]], *, height: int = 560) -> Non
     if key:
         _google_maps(rows, key, height=height)
     else:
-        st.caption(
-            "Street map via a light basemap. Add `GOOGLE_MAPS_API_KEY` to `.env` "
-            "for the full Google Maps experience (streets, satellite, Street View)."
-        )
+        st.caption("Street map of open hazard reports across NYC.")
         _folium_streets(rows, height=height)
 
 

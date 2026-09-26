@@ -43,7 +43,7 @@ def grok_tts(text: str, *, voice_id: str = "eve") -> bytes:
     """xAI Grok TTS → MP3 bytes. Docs: POST https://api.x.ai/v1/tts"""
     key = _xai_key()
     if not key:
-        raise RuntimeError("XAI_API_KEY required for Grok voice")
+        raise RuntimeError("Voice playback is temporarily unavailable.")
     clipped = text.strip()[:1500]
     resp = requests.post(
         "https://api.x.ai/v1/tts",
@@ -66,7 +66,7 @@ def gemini_tts(text: str, *, voice_name: str = "Kore") -> bytes:
     """Gemini TTS → WAV bytes (PCM wrapped)."""
     key = _gemini_key()
     if not key:
-        raise RuntimeError("GEMINI_API_KEY required for Gemini voice")
+        raise RuntimeError("Voice playback is temporarily unavailable.")
     clipped = text.strip()[:1500]
     model = os.getenv("GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts")
     url = (
