@@ -5,3 +5,5 @@
 .streamlit/secrets.toml
 urbanpulse.db
 data/outbound_mail/
+spectrum/node_modules/
+spectrum/dist/
