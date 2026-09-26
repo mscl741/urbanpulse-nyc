@@ -1,8 +1,14 @@
-"""Text-to-speech: Grok Voice API, Gemini TTS, or browser speechSynthesis fallback."""
+"""Text-to-speech: Grok Voice API, Gemini TTS, or browser speechSynthesis fallback.
+
+Only one voice engine plays at a time. Duplicate utterances are suppressed so
+Streamlit reruns do not stack overlapping speech.
+"""
 
 from __future__ import annotations
 
 import base64
+import hashlib
+import html
 import io
 import os
 import wave
@@ -29,12 +35,15 @@ def _gemini_key() -> str | None:
     return key
 
 
+def _utterance_id(text: str) -> str:
+    return hashlib.sha1(text.strip().encode("utf-8")).hexdigest()[:16]
+
+
 def grok_tts(text: str, *, voice_id: str = "eve") -> bytes:
     """xAI Grok TTS → MP3 bytes. Docs: POST https://api.x.ai/v1/tts"""
     key = _xai_key()
     if not key:
         raise RuntimeError("XAI_API_KEY required for Grok voice")
-    # Keep utterances short for alerts / accessibility
     clipped = text.strip()[:1500]
     resp = requests.post(
         "https://api.x.ai/v1/tts",
@@ -99,7 +108,7 @@ def _pcm16_to_wav(pcm: bytes, *, rate: int = 24000) -> bytes:
 
 
 def browser_speak(text: str) -> None:
-    """Always-available accessibility fallback using the phone/browser voice engine."""
+    """Single browser speechSynthesis utterance (cancels any prior speech)."""
     safe = (
         text.replace("\\", "\\\\")
         .replace("`", "'")
@@ -110,11 +119,32 @@ def browser_speak(text: str) -> None:
     components.html(
         f"""
         <script>
-          const u = new SpeechSynthesisUtterance({repr(safe)});
-          u.rate = 1.0;
-          u.lang = "en-US";
-          window.speechSynthesis.cancel();
-          window.speechSynthesis.speak(u);
+          try {{
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance({repr(safe)});
+            u.rate = 1.0;
+            u.lang = "en-US";
+            window.speechSynthesis.speak(u);
+          }} catch (e) {{}}
+        </script>
+        """,
+        height=0,
+    )
+
+
+def _play_audio_once(audio: bytes, mime: str) -> None:
+    """Play cloud audio once via HTML — avoids st.audio autoplay on every rerun."""
+    b64 = base64.b64encode(audio).decode("ascii")
+    safe_mime = html.escape(mime)
+    components.html(
+        f"""
+        <audio id="up-tts" autoplay style="display:none">
+          <source src="data:{safe_mime};base64,{b64}" type="{safe_mime}">
+        </audio>
+        <script>
+          try {{ window.speechSynthesis && window.speechSynthesis.cancel(); }} catch (e) {{}}
+          const a = document.getElementById("up-tts");
+          if (a) {{ a.play().catch(function(){{}}); }}
         </script>
         """,
         height=0,
@@ -123,20 +153,19 @@ def browser_speak(text: str) -> None:
 
 def synthesize(text: str, *, provider: Provider, use_mock: bool = False) -> tuple[bytes | None, str]:
     """
-    Returns (audio_bytes, mime). audio_bytes may be None if only browser TTS was used.
-    mime is 'audio/mp3' or 'audio/wav'.
+    Returns (audio_bytes, mime). Prefer cloud TTS; fall back to browser-only.
+    Never stacks cloud + browser in the same call — caller plays one path.
     """
-    if use_mock or not text.strip():
-        browser_speak(text)
+    if not text.strip():
+        return None, "empty"
+    if use_mock:
         return None, "browser"
 
     try:
         if provider == "gemini":
             return gemini_tts(text), "audio/wav"
         return grok_tts(text), "audio/mp3"
-    except Exception as exc:
-        # Fall back so visually impaired users still hear something
-        browser_speak(f"{text}. (Cloud voice unavailable: {exc})")
+    except Exception:
         return None, "browser"
 
 
@@ -147,10 +176,26 @@ def speak_and_play(
     use_mock: bool = False,
     key: str | None = None,
 ) -> None:
-    """Synthesize and play in the Streamlit UI."""
-    audio, mime = synthesize(text, provider=provider, use_mock=use_mock)
+    """Synthesize and play exactly once per unique utterance (no overlapping voices)."""
+    clipped = (text or "").strip()
+    if not clipped:
+        return
+
+    uid = key or _utterance_id(clipped)
+    spoken = list(st.session_state.get("_tts_spoken_ids") or [])
+    if uid in spoken:
+        return
+    spoken.append(uid)
+    st.session_state["_tts_spoken_ids"] = spoken[-40:]
+
+    # Prefer a single engine: cloud if available, else browser — never both.
+    if use_mock or bool(st.session_state.get("a11y_browser_backup", False)):
+        browser_speak(clipped)
+        return
+
+    audio, mime = synthesize(clipped, provider=provider, use_mock=False)
     if audio and mime.startswith("audio/"):
-        st.audio(audio, format=mime, autoplay=True)
-        # Also kick browser voice as redundancy on mobile autoplay blocks
-        if st.session_state.get("a11y_browser_backup", True):
-            browser_speak(text)
+        _play_audio_once(audio, mime)
+        return
+    # Cloud failed — one browser voice only
+    browser_speak(clipped)

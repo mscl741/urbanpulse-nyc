@@ -39,9 +39,11 @@ class HazardReport(Base):
 
     __tablename__ = "hazard_reports"
 
+    # Composite PK (id, created_at) is required for Timescale hypertables.
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        primary_key=True,
         nullable=False,
         index=True,
         default=lambda: datetime.now(timezone.utc),
@@ -74,7 +76,14 @@ _initialized = False
 
 
 def database_url() -> str:
-    return os.getenv("DATABASE_URL", "sqlite:///./urbanpulse.db")
+    raw = (os.getenv("DATABASE_URL") or "sqlite:///./urbanpulse.db").strip()
+    # Tiger / Timescale often hands out postgres:// — SQLAlchemy wants postgresql://
+    if raw.startswith("postgres://"):
+        raw = "postgresql://" + raw[len("postgres://") :]
+    # Prefer psycopg2 (in requirements) over psycopg3 if none specified
+    if raw.startswith("postgresql://") and "+psycopg" not in raw.split("://", 1)[0]:
+        raw = "postgresql+psycopg2://" + raw[len("postgresql://") :]
+    return raw
 
 
 def is_postgres(url: str | None = None) -> bool:
@@ -148,6 +157,31 @@ def init_db() -> dict[str, Any]:
                 conn.execute(text("CREATE EXTENSION IF NOT EXISTS timescaledb CASCADE"))
             except Exception as exc:  # noqa: BLE001
                 info["timescale_extension_error"] = str(exc)
+            # Ensure PK includes created_at (Timescale requirement)
+            try:
+                conn.execute(
+                    text(
+                        """
+                        DO $$
+                        BEGIN
+                          IF EXISTS (
+                            SELECT 1 FROM information_schema.table_constraints
+                            WHERE table_name = 'hazard_reports'
+                              AND constraint_type = 'PRIMARY KEY'
+                              AND constraint_name = 'hazard_reports_pkey'
+                          ) THEN
+                            ALTER TABLE hazard_reports DROP CONSTRAINT hazard_reports_pkey;
+                          END IF;
+                          ALTER TABLE hazard_reports
+                            ADD PRIMARY KEY (id, created_at);
+                        EXCEPTION WHEN others THEN
+                          NULL; -- already composite or not applicable
+                        END $$;
+                        """
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001
+                info["pk_migrate_note"] = str(exc)
             try:
                 conn.execute(
                     text(

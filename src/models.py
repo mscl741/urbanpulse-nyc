@@ -49,6 +49,25 @@ class DispatchTicket(BaseModel):
     def normalize_hazard(cls, value: str) -> str:
         return value.strip().lower()
 
+    def is_recognized_hazard(self) -> bool:
+        """False when the model found nothing actionable — skip filing / email."""
+        ht = self.hazard_type.lower()
+        no_hit = (
+            "no hazard",
+            "not a hazard",
+            "no_hazard",
+            "none detected",
+            "unrecognized",
+            "no issue",
+            "not applicable",
+            "n/a",
+        )
+        if any(token in ht for token in no_hit) or ht in {"none", "unknown", "n/a"}:
+            return False
+        if self.confidence < 0.35:
+            return False
+        return True
+
 
 class DuplicateVerdict(BaseModel):
     is_same_issue: bool
@@ -85,7 +104,12 @@ Return ONLY valid JSON:
 Rules:
 - Route to the NYC agency that owns the hazard.
 - Draft a polite resident email including the location string.
-- If unclear, lower confidence; prefer "Other" / "routine" over guessing wildly.
+- If the photo does NOT show a clear civic street / sidewalk / building-exterior hazard
+  (e.g. selfie, indoor room, food, unrelated object, blank sky), set:
+  hazard_type to "no hazard detected", confidence <= 0.25, severity "low", agency "Other",
+  recommended_priority "routine", summarize why in summary, and put short placeholders in
+  council_email_subject / council_email_body (the app will not send email for these).
+- If unclear but possibly a hazard, lower confidence; prefer "Other" / "routine" over guessing.
 - Raw JSON only — no markdown fences.
 """
 

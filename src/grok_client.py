@@ -53,6 +53,20 @@ def mock_analyze(location: str, filename: str | None = None) -> DispatchTicket:
     elif "curb" in hint or "ramp" in hint or "accessib" in hint:
         hazard, agency, severity = "defective pedestrian ramp / curb cut", "DOT", Severity.HIGH
         priority = "expedited"
+    elif any(x in hint for x in ("clear", "none", "selfie", "food", "indoor", "blank")):
+        return DispatchTicket(
+            hazard_type="no hazard detected",
+            severity=Severity.LOW,
+            agency="Other",
+            confidence=0.15,
+            summary=(
+                f"Mock analysis: no civic street hazard recognized near {location}. "
+                "Photo does not appear to show a reportable NYC hazard."
+            ),
+            council_email_subject="No hazard — do not send",
+            council_email_body="No municipal hazard recognized. This draft should not be sent.",
+            recommended_priority="routine",
+        )
     else:
         hazard, agency, severity = "street surface hazard", "DOT", Severity.MEDIUM
         priority = "routine"

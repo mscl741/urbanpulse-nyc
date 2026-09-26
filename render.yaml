@@ -16,6 +16,8 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      - key: DATABASE_URL
+        sync: false
       - key: GROK_MODEL
         value: grok-4.7
       - key: GEMINI_VISION_MODEL

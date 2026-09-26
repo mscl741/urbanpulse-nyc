@@ -1,7 +1,4 @@
-"""Active AI provider: Grok (xAI) vs Gemini (Google).
-
-Switch in `.env` by commenting / uncommenting ACTIVE_AI — not in the UI.
-"""
+"""Active AI provider + opt-in voice services (default OFF)."""
 
 from __future__ import annotations
 
@@ -15,30 +12,44 @@ Provider = Literal["grok", "gemini"]
 
 def get_provider() -> Provider:
     """
-    Read ACTIVE_AI from .env (reloaded each call so edits apply after restart).
+    Read ACTIVE_AI from .env.
 
     In `.env`, leave exactly one line uncommented:
         ACTIVE_AI=grok
         # ACTIVE_AI=gemini
-    or:
-        # ACTIVE_AI=grok
-        ACTIVE_AI=gemini
     """
     raw = (os.getenv("ACTIVE_AI") or "grok").strip().lower()
     return "gemini" if raw == "gemini" else "grok"
 
 
 def set_provider(provider: Provider) -> None:
-    """Kept for compatibility; UI no longer switches — edit ACTIVE_AI in .env."""
     st.session_state["ai_provider"] = provider
 
 
+def voice_services_enabled() -> bool:
+    """Master switch — off by default so TTS never surprises users."""
+    return bool(st.session_state.get("a11y_voice_master", False))
+
+
+def voice_for_reports() -> bool:
+    return voice_services_enabled() and bool(st.session_state.get("a11y_voice_reports", True))
+
+
+def voice_for_chat() -> bool:
+    return voice_services_enabled() and bool(st.session_state.get("a11y_voice_chat", True))
+
+
+def voice_for_scan() -> bool:
+    return voice_services_enabled() and bool(st.session_state.get("a11y_voice_scan", True))
+
+
 def voice_enabled() -> bool:
-    return bool(st.session_state.get("a11y_voice", True))
+    """Backward-compatible: any voice feature armed."""
+    return voice_services_enabled()
 
 
 def alert_voice_enabled() -> bool:
-    return bool(st.session_state.get("a11y_alert_voice", True))
+    return voice_for_scan()
 
 
 def location_consent() -> bool:
