@@ -46,17 +46,64 @@ html, body, [class*="css"], .stApp, [data-testid="stAppViewContainer"] {
   background: var(--up-bg) !important;
 }
 
-/* —— Hide unpolished Streamlit chrome —— */
+/* —— Hide unpolished Streamlit chrome (keep sidebar reopen) —— */
+/* Root cause previously: header height:0 + toolbar hidden removed collapsedControl. */
 #MainMenu { visibility: hidden; }
 footer { visibility: hidden; }
-header[data-testid="stHeader"] {
-  background: transparent !important;
-  height: 0 !important;
-}
-[data-testid="stToolbar"] { visibility: hidden; height: 0; }
 [data-testid="stDecoration"] { display: none !important; }
 div[data-testid="stStatusWidget"] { display: none !important; }
 .stDeployButton, [data-testid="stAppDeployButton"] { display: none !important; }
+
+/* Keep header/toolbar tall enough for the expand control (desktop + mobile) */
+header[data-testid="stHeader"] {
+  background: transparent !important;
+  height: 3rem !important;
+  min-height: 3rem !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  z-index: 999990 !important;
+}
+[data-testid="stToolbar"] {
+  visibility: visible !important;
+  height: auto !important;
+  min-height: 2.75rem !important;
+  display: flex !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+/* Always show the reopen control when the sidebar is collapsed */
+[data-testid="collapsedControl"],
+[data-testid="stExpandSidebarButton"],
+[data-testid="stSidebarCollapsedControl"] {
+  visibility: visible !important;
+  display: flex !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  position: fixed !important;
+  left: 0.65rem !important;
+  top: 0.55rem !important;
+  z-index: 1000001 !important;
+  width: 2.25rem !important;
+  height: 2.25rem !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(32, 33, 36, 0.12) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 1px 3px rgba(32, 33, 36, 0.12) !important;
+}
+[data-testid="stHeader"] button[kind="header"],
+[data-testid="stHeader"] [data-testid="baseButton-header"],
+[data-testid="stHeader"] [data-testid="stBaseButton-header"],
+[data-testid="stToolbar"] button[kind="headerNoPadding"],
+[data-testid="stToolbar"] [data-testid="stBaseButton-headerNoPadding"] {
+  visibility: visible !important;
+  display: inline-flex !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  z-index: 1000001 !important;
+}
 
 .block-container {
   padding-top: 1.5rem !important;

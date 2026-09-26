@@ -203,6 +203,33 @@ def _run_geofence_alerts(lat: float, lon: float, *, use_mock: bool) -> None:
     _maybe_speak(spoken, use_mock=use_mock, feature="scan")
 
 
+def _demo_near_me_after_file(
+    lat: float, lon: float, *, report_id: int, use_mock: bool
+) -> None:
+    """After filing with coords, confirm the pin is findable via near-me scan."""
+    profile = load_profile()
+    result = scan_nearby_hazards(lat, lon, profile, radius_m=300.0)
+    ids = [int(h["id"]) for h in result.get("hazards") or [] if h.get("id") is not None]
+    if report_id in ids:
+        st.info(
+            f"Near-me check: open report **#{report_id}** is already in your 300 m scan. "
+            "On **Near-me & safety**, turn on location + voice, then tap **Run near-me scan** "
+            "to hear nearby hazards (including this one)."
+        )
+        if voice_for_scan():
+            _maybe_speak(
+                f"Your new report {report_id} is on the near-me list. "
+                + (result.get("spoken") or ""),
+                use_mock=use_mock,
+                feature="scan",
+            )
+    else:
+        st.caption(
+            "Pinned on the live map. Open **Near-me & safety → Run near-me scan** "
+            "from the same pin to hear nearby open hazards."
+        )
+
+
 # ---------- location picker (shared) ----------
 
 
@@ -689,6 +716,15 @@ def render_report() -> None:
         use_mock=use_mock,
         feature="reports",
     )
+    if lat is not None and lon is not None:
+        _demo_near_me_after_file(
+            float(lat), float(lon), report_id=int(report_id), use_mock=use_mock
+        )
+    else:
+        st.info(
+            "Add a map pin when filing so **Near-me & safety → Run near-me scan** "
+            "can find this hazard next to you."
+        )
     render_ticket(ticket, location, report_id=report_id, include_email=True)
 
 
