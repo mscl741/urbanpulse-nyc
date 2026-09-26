@@ -266,10 +266,20 @@ def save_ticket(
         return int(row.id)
 
 
+def _get_report_row(session, report_id: int) -> HazardReport | None:
+    """Lookup by report id only — Timescale uses composite PK (id, created_at)."""
+    return session.scalars(
+        select(HazardReport)
+        .where(HazardReport.id == report_id)
+        .order_by(desc(HazardReport.created_at))
+        .limit(1)
+    ).first()
+
+
 def attach_image(report_id: int, image_path: str, image_hash: str) -> None:
     ensure_db()
     with session_scope() as session:
-        row = session.get(HazardReport, report_id)
+        row = _get_report_row(session, report_id)
         if row is None:
             raise ValueError(f"No report #{report_id}")
         row.image_path = image_path
@@ -279,7 +289,7 @@ def attach_image(report_id: int, image_path: str, image_hash: str) -> None:
 def resolve_ticket(report_id: int) -> None:
     ensure_db()
     with session_scope() as session:
-        row = session.get(HazardReport, report_id)
+        row = _get_report_row(session, report_id)
         if row is None:
             raise ValueError(f"No report #{report_id}")
         row.status = "resolved"
@@ -289,7 +299,7 @@ def resolve_ticket(report_id: int) -> None:
 def reopen_ticket(report_id: int) -> None:
     ensure_db()
     with session_scope() as session:
-        row = session.get(HazardReport, report_id)
+        row = _get_report_row(session, report_id)
         if row is None:
             raise ValueError(f"No report #{report_id}")
         row.status = "open"
@@ -299,7 +309,7 @@ def reopen_ticket(report_id: int) -> None:
 def get_ticket(report_id: int) -> dict[str, Any] | None:
     ensure_db()
     with session_scope() as session:
-        row = session.get(HazardReport, report_id)
+        row = _get_report_row(session, report_id)
         return _row_dict(row) if row else None
 
 
@@ -397,7 +407,7 @@ def mark_email_sent(
 ) -> None:
     ensure_db()
     with session_scope() as session:
-        row = session.get(HazardReport, report_id)
+        row = _get_report_row(session, report_id)
         if row is None:
             raise ValueError(f"No report #{report_id}")
         row.email_status = status
