@@ -59,24 +59,40 @@ footer { visibility: hidden; }
 div[data-testid="stStatusWidget"] { display: none !important; }
 .stDeployButton, [data-testid="stAppDeployButton"] { display: none !important; }
 
-/* Top brand + nav bar */
+/* Top brand + nav bar — roomy so tabs don't clip page brand */
 header[data-testid="stHeader"] {
-  background: rgba(255, 255, 255, 0.92) !important;
+  background: rgba(255, 255, 255, 0.96) !important;
   backdrop-filter: blur(10px);
-  height: 3.5rem !important;
-  min-height: 3.5rem !important;
+  height: auto !important;
+  min-height: 3.75rem !important;
   visibility: visible !important;
   opacity: 1 !important;
   z-index: 999990 !important;
   border-bottom: 1px solid var(--up-line) !important;
+  padding-left: 0.35rem !important;
+  padding-right: 0.75rem !important;
 }
 [data-testid="stToolbar"] {
   visibility: visible !important;
   height: auto !important;
-  min-height: 3rem !important;
+  min-height: 3.25rem !important;
   display: flex !important;
   opacity: 1 !important;
   pointer-events: auto !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  padding-left: 0.25rem !important;
+}
+
+/* Give top nav links breathing room (Home shouldn't sit under the sidebar arrow) */
+[data-testid="stHeader"] nav,
+header[data-testid="stHeader"] [data-testid="stToolbar"] > div {
+  margin-left: 0.15rem !important;
+}
+[data-testid="stHeader"] a,
+[data-testid="stHeader"] [data-testid="stPageLink-NavLink"],
+header[data-testid="stHeader"] button[kind="headerNoPadding"] {
+  margin-left: 0.1rem !important;
 }
 
 /* Fix Material icon names showing as raw text (e.g. keyboard_double_arrow_left) */
@@ -104,7 +120,7 @@ span[data-testid="stIconMaterial"],
   color: var(--up-ink) !important;
 }
 
-/* Always show the reopen control when the sidebar is collapsed */
+/* Sidebar reopen: below top tabs and on the RIGHT so Home + brand stay clear */
 [data-testid="collapsedControl"],
 [data-testid="stExpandSidebarButton"],
 [data-testid="stSidebarCollapsedControl"] {
@@ -113,8 +129,9 @@ span[data-testid="stIconMaterial"],
   opacity: 1 !important;
   pointer-events: auto !important;
   position: fixed !important;
-  left: 0.65rem !important;
-  top: 0.65rem !important;
+  left: auto !important;
+  right: 0.85rem !important;
+  top: 4.75rem !important;
   z-index: 1000001 !important;
   width: 2.35rem !important;
   height: 2.35rem !important;
@@ -175,9 +192,15 @@ span[data-testid="stIconMaterial"],
 }
 
 .block-container {
-  padding-top: 1.25rem !important;
+  /* Clear sticky top nav so UrbanPulse NYC brand is never clipped */
+  padding-top: 3.25rem !important;
   padding-bottom: 3rem !important;
+  padding-left: 1.75rem !important;
+  padding-right: 1.75rem !important;
   max-width: 1080px;
+}
+section.main > div {
+  padding-top: 0.5rem !important;
 }
 
 /* —— Top navigation —— */
@@ -220,15 +243,19 @@ p, li, label, .stMarkdown, [data-testid="stCaption"] {
   display: flex;
   align-items: baseline;
   gap: 0.55rem;
-  margin: 0.15rem 0 0.85rem 0;
+  flex-wrap: wrap;
+  margin: 0.35rem 0 1.1rem 0;
+  padding-top: 0.35rem;
+  position: relative;
+  z-index: 1;
 }
 .up-topbrand .name {
   font-family: var(--up-font);
   font-weight: 800;
-  font-size: clamp(1.55rem, 3.5vw, 2rem);
+  font-size: clamp(1.65rem, 3.8vw, 2.15rem);
   letter-spacing: -0.03em;
   color: var(--up-ink);
-  line-height: 1.1;
+  line-height: 1.15;
 }
 .up-topbrand .name span {
   color: var(--up-accent);
@@ -503,11 +530,19 @@ iframe {
 /* —— Mobile —— */
 @media (max-width: 768px) {
   .block-container {
+    padding-top: 3rem !important;
     padding-left: 1rem !important;
     padding-right: 1rem !important;
   }
   .up-brand {
     font-size: 2.2rem !important;
+  }
+  [data-testid="collapsedControl"],
+  [data-testid="stExpandSidebarButton"],
+  [data-testid="stSidebarCollapsedControl"] {
+    top: 5.25rem !important;
+    right: 0.65rem !important;
+    left: auto !important;
   }
   [data-testid="stMetric"] {
     margin-bottom: 0.5rem;
