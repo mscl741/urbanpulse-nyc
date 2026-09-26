@@ -27,6 +27,48 @@ Agency = Literal[
 ]
 
 
+# Weather / flood-like conditions — map pin + public alerts, NOT agency email.
+# Do NOT treat hydrant leak / icy sidewalk alone as weather (reportable infrastructure).
+WEATHER_TOKENS = (
+    "flood",
+    "flooding",
+    "street flooding",
+    "standing water",
+    "ponding",
+    "flash flood",
+    "storm surge",
+    "heavy rain",
+    "rainwater",
+    "inundation",
+    "water accumulation",
+)
+
+_WEATHER_RADIUS_M: dict[str, float] = {
+    "low": 100.0,
+    "medium": 200.0,
+    "high": 350.0,
+    "critical": 500.0,
+}
+
+
+def is_weather_hazard_type(hazard_type: str) -> bool:
+    """True for flood / standing-water style weather hazards (not infrastructure leaks)."""
+    ht = (hazard_type or "").strip().lower()
+    if not ht:
+        return False
+    # Explicit infrastructure exclusions even if "water" appears nearby in prose.
+    if any(x in ht for x in ("hydrant", "icy", "ice", "leak", "pipe", "broken water main")):
+        if not any(tok in ht for tok in ("flood", "flooding", "standing water", "ponding", "inundation")):
+            return False
+    return any(tok in ht for tok in WEATHER_TOKENS)
+
+
+def weather_affected_radius_m(severity: str | Severity) -> float:
+    """Affected-area radius (meters) for a weather hazard pin by severity."""
+    key = severity.value if isinstance(severity, Severity) else str(severity).strip().lower()
+    return _WEATHER_RADIUS_M.get(key, 200.0)
+
+
 class DispatchTicket(BaseModel):
     """JSON contract Grok must satisfy so tickets are machine-routable."""
 
@@ -68,6 +110,10 @@ class DispatchTicket(BaseModel):
             return False
         return True
 
+    def is_weather_hazard(self) -> bool:
+        """Weather / flood conditions — map + alerts only; no agency email."""
+        return is_weather_hazard_type(self.hazard_type)
+
 
 class DuplicateVerdict(BaseModel):
     is_same_issue: bool
@@ -103,11 +149,20 @@ Return ONLY valid JSON:
 
 Rules:
 - Route to the NYC agency that owns the hazard.
-- Draft a polite resident email including the location string.
+- Draft a polite resident email including the location string for constructional /
+  infrastructure hazards (potholes, scaffolding, signals, curb cuts, hydrant leaks, etc.).
+- Weather hazards (flooding, standing water, ponding, flash flood, storm surge, heavy rain,
+  rainwater, inundation, water accumulation): these are for map pins + public near-me alerts,
+  NOT agency emails — the city cannot "fix" weather. Prefer hazard_type like
+  "street flooding" or "standing water" when water + rain are evident. Still fill
+  council_email_subject / council_email_body with short placeholders (schema requires them);
+  the app will not send email for weather hazards.
 - If weather-aid context is provided (recent rain / humidity), use it only as supporting
   evidence for flooding or wet pavement — never invent flooding that is not visible in the photo.
   When water on the street is visible AND recent rain is elevated, prefer hazard_type like
   "street flooding" or "standing water", agency DEP, and raise severity appropriately.
+- Do NOT classify hydrant leaks or icy sidewalks alone as weather — those remain reportable
+  infrastructure (agency email path).
 - If the photo does NOT show a clear civic street / sidewalk / building-exterior hazard
   (e.g. selfie, indoor room, food, unrelated object, blank sky), set:
   hazard_type to "no hazard detected", confidence <= 0.25, severity "low", agency "Other",

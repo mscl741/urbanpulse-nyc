@@ -25,7 +25,7 @@ from sqlalchemy import (
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 
-from models import DispatchTicket
+from models import DispatchTicket, is_weather_hazard_type, weather_affected_radius_m
 
 metadata = MetaData()
 
@@ -68,6 +68,8 @@ class HazardReport(Base):
     image_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     image_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Weather hazards: affected-area radius (meters) around the pin for near-me alerts.
+    affected_radius_m: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 _engine: Engine | None = None
@@ -137,6 +139,7 @@ def _row_dict(r: HazardReport) -> dict[str, Any]:
         "email_status": r.email_status,
         "email_to": r.email_to,
         "email_method": r.email_method,
+        "affected_radius_m": r.affected_radius_m,
     }
 
 
@@ -207,6 +210,7 @@ def _migrate_columns(engine: Engine) -> None:
         "ALTER TABLE hazard_reports ADD COLUMN image_path VARCHAR(512)",
         "ALTER TABLE hazard_reports ADD COLUMN image_hash VARCHAR(64)",
         "ALTER TABLE hazard_reports ADD COLUMN resolved_at TIMESTAMP",
+        "ALTER TABLE hazard_reports ADD COLUMN affected_radius_m FLOAT",
     ]
     with engine.begin() as conn:
         for sql in stmts:
@@ -241,6 +245,9 @@ def save_ticket(
     status: str = "open",
 ) -> int:
     ensure_db()
+    aff_radius: float | None = None
+    if ticket.is_weather_hazard():
+        aff_radius = weather_affected_radius_m(ticket.severity)
     row = HazardReport(
         created_at=datetime.now(timezone.utc),
         location=location,
@@ -259,6 +266,7 @@ def save_ticket(
         status=status,
         image_path=image_path,
         image_hash=image_hash,
+        affected_radius_m=aff_radius,
     )
     with session_scope() as session:
         session.add(row)
@@ -372,7 +380,13 @@ def nearby_open_reports(
         for r in rows:
             assert r.latitude is not None and r.longitude is not None
             d = _haversine_m(lat, lon, float(r.latitude), float(r.longitude))
-            if d <= radius_m:
+            aff = 0.0
+            if is_weather_hazard_type(r.hazard_type):
+                aff = float(r.affected_radius_m or 0.0)
+                if aff <= 0:
+                    aff = weather_affected_radius_m(r.severity)
+            # Include if within scan radius, or inside a weather affected zone.
+            if d <= max(radius_m, aff):
                 scored.append((d, r))
         scored.sort(key=lambda t: t[0])
         out = []

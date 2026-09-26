@@ -32,6 +32,14 @@ def _center(rows: list[dict[str, Any]]) -> tuple[float, float]:
     )
 
 
+def _affected_radius(r: dict[str, Any]) -> float:
+    try:
+        val = float(r.get("affected_radius_m") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+    return val if val > 0 else 0.0
+
+
 def render_incident_map(rows: list[dict[str, Any]], *, height: int = 560) -> None:
     """Draw a street basemap with hazard markers (same API as before)."""
     if not rows:
@@ -78,13 +86,34 @@ def _folium_streets(rows: list[dict[str, Any]], *, height: int) -> None:
             if r.get("status") == "resolved"
             else SEVERITY_COLOR.get(str(r.get("severity", "medium")), _COLORS["medium"])
         )
+        aff = _affected_radius(r)
+        zone_note = (
+            f"<br/><em>Weather zone · ~{int(aff)} m affected radius</em>"
+            if aff > 0
+            else ""
+        )
         popup = (
             f"<div style='font-family:Inter,system-ui,sans-serif;font-size:13px'>"
             f"<b>#{r['id']} · {r.get('hazard_type', '')}</b><br/>"
             f"{r.get('severity', '')} · {r.get('status', '')}<br/>"
-            f"{r.get('location', '')}<br/>"
+            f"{r.get('location', '')}{zone_note}<br/>"
             f"<small style='color:#5F6368'>{r.get('created_at', '')}</small></div>"
         )
+        tip = f"#{r['id']} {r.get('hazard_type', '')}"
+        if aff > 0:
+            tip += f" · weather zone {int(aff)} m"
+        if aff > 0:
+            folium.Circle(
+                location=[float(r["latitude"]), float(r["longitude"])],
+                radius=aff,
+                color=color,
+                weight=1,
+                fill=True,
+                fill_color=color,
+                fill_opacity=0.18,
+                popup=folium.Popup(popup, max_width=280),
+                tooltip=tip,
+            ).add_to(m)
         folium.CircleMarker(
             location=[float(r["latitude"]), float(r["longitude"])],
             radius=9,
@@ -94,7 +123,7 @@ def _folium_streets(rows: list[dict[str, Any]], *, height: int) -> None:
             fill_color=color,
             fill_opacity=0.92,
             popup=folium.Popup(popup, max_width=280),
-            tooltip=f"#{r['id']} {r.get('hazard_type', '')}",
+            tooltip=tip,
         ).add_to(m)
 
     folium.LayerControl(collapsed=True).add_to(m)
@@ -110,18 +139,23 @@ def _google_maps(rows: list[dict[str, Any]], api_key: str, *, height: int) -> No
             if r.get("status") == "resolved"
             else SEVERITY_COLOR.get(str(r.get("severity", "medium")), _COLORS["medium"])
         )
+        aff = _affected_radius(r)
+        body = (
+            f"{r.get('severity', '')} · {r.get('status', '')}\\n"
+            f"{r.get('location', '')}\\n"
+            f"{r.get('created_at', '')}"
+        )
+        if aff > 0:
+            body += f"\\nWeather zone · ~{int(aff)} m affected radius"
         markers.append(
             {
                 "id": r["id"],
                 "lat": float(r["latitude"]),
                 "lng": float(r["longitude"]),
                 "title": f"#{r['id']} {r.get('hazard_type', '')}",
-                "body": (
-                    f"{r.get('severity', '')} · {r.get('status', '')}\\n"
-                    f"{r.get('location', '')}\\n"
-                    f"{r.get('created_at', '')}"
-                ),
+                "body": body,
                 "color": color,
+                "radius_m": aff,
             }
         )
 
@@ -164,6 +198,18 @@ def _google_maps(rows: list[dict[str, Any]], api_key: str, *, height: int) -> No
       MARKERS.forEach((m) => {{
         const pos = {{ lat: m.lat, lng: m.lng }};
         bounds.extend(pos);
+        if (m.radius_m && m.radius_m > 0) {{
+          new google.maps.Circle({{
+            map,
+            center: pos,
+            radius: m.radius_m,
+            strokeColor: m.color,
+            strokeOpacity: 0.55,
+            strokeWeight: 1,
+            fillColor: m.color,
+            fillOpacity: 0.18,
+          }});
+        }}
         const marker = new google.maps.Marker({{
           position: pos,
           map,

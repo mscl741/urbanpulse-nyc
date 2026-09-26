@@ -57,7 +57,7 @@ from geo_services import (  # noqa: E402
 )
 from map_view import render_incident_map  # noqa: E402
 from media import image_sha256, read_image_bytes, save_report_image  # noqa: E402
-from models import DispatchTicket  # noqa: E402
+from models import DispatchTicket, is_weather_hazard_type, weather_affected_radius_m  # noqa: E402
 from notify import (  # noqa: E402
     build_draft,
     intended_agency_email,
@@ -447,8 +447,23 @@ def render_ticket(
     c4.metric("Confidence", f"{ticket.confidence:.0%}")
     st.write(ticket.summary)
 
-    if not include_email or not ticket.is_recognized_hazard():
+    if not ticket.is_recognized_hazard():
         st.info("No agency email draft — no clear civic hazard was recognized.")
+        return
+
+    # Weather hazards: map pin + affected radius + public alerts — no agency email.
+    if ticket.is_weather_hazard():
+        radius_m = int(weather_affected_radius_m(ticket.severity))
+        st.info(
+            f"**Weather hazard mapped** with an affected-area radius of about **{radius_m} m**. "
+            "No agency email is sent — the city cannot “fix” weather or flooding. "
+            "Neighbors with near-me / accessibility alerts get a warning if they are in range, "
+            "plus directions toward nearby safety areas (verify with 311 / Know Your Zone)."
+        )
+        return
+
+    if not include_email:
+        st.info("No agency email draft for this report.")
         return
 
     st.markdown("#### Notify")
@@ -719,15 +734,28 @@ def render_report() -> None:
         st.error("Couldn’t save that report right now. Please try again in a moment.")
         return
 
-    st.success(f"Filed as open report #{report_id} — pinned on the live map.")
+    if ticket.is_weather_hazard():
+        radius_m = int(weather_affected_radius_m(ticket.severity))
+        st.success(
+            f"Filed weather hazard #{report_id} — pinned with ~{radius_m} m affected area "
+            "(no agency email)."
+        )
+        speak = (
+            f"Weather hazard filed as report {report_id}. "
+            f"{ticket.hazard_type}. Severity {ticket.severity.value}. "
+            f"Mapped with about {radius_m} meters affected area. "
+            "No agency email was sent. Neighbors with alerts will be warned if nearby. "
+            f"{ticket.summary}"
+        )
+    else:
+        st.success(f"Filed as open report #{report_id} — pinned on the live map.")
+        speak = (
+            f"Hazard filed as report {report_id}. "
+            f"{ticket.hazard_type}. Severity {ticket.severity.value}. "
+            f"Routed to {ticket.agency}. {ticket.summary}"
+        )
     st.session_state["focus_report_id"] = report_id
-    _maybe_speak(
-        f"Hazard filed as report {report_id}. "
-        f"{ticket.hazard_type}. Severity {ticket.severity.value}. "
-        f"Routed to {ticket.agency}. {ticket.summary}",
-        use_mock=use_mock,
-        feature="reports",
-    )
+    _maybe_speak(speak, use_mock=use_mock, feature="reports")
     if lat is not None and lon is not None:
         _demo_near_me_after_file(
             float(lat), float(lon), report_id=int(report_id), use_mock=use_mock
@@ -781,6 +809,13 @@ def render_map() -> None:
         )
         st.write(detail.get("summary") or "")
         st.caption(detail.get("location"))
+        if is_weather_hazard_type(str(detail.get("hazard_type") or "")):
+            aff = detail.get("affected_radius_m")
+            aff_txt = f"~{int(aff)} m" if aff else "severity-based"
+            st.warning(
+                f"**Weather zone** — affected area {aff_txt}. "
+                "No agency email for weather hazards; near-me alerts warn people in range."
+            )
         maps_link = (
             f"https://www.google.com/maps?q={detail.get('latitude')},{detail.get('longitude')}"
             if detail.get("latitude") is not None
@@ -847,19 +882,28 @@ def render_safety() -> None:
             )
             st.session_state["last_near_scan"] = result
             st.session_state.pop("_tts_spoken_ids", None)
+            has_weather = bool(result.get("weather_warnings"))
             st.success(
                 result["spoken"]
-                if result["count"] or result["flood_lines"]
+                if result["count"] or result["flood_lines"] or has_weather
                 else "Scan complete — all clear nearby."
             )
+            for line in result.get("weather_warnings") or []:
+                st.error(line)
             for line in result["flood_lines"]:
                 st.warning(line)
+            for line in result.get("safety_directions") or []:
+                st.info(line)
             if result["hazards"]:
                 for h in result["hazards"]:
                     dist = h.get("distance_m")
                     dist_txt = f" · ~{int(dist)} m" if dist is not None else ""
+                    ht = str(h.get("hazard_type") or "")
+                    wx = " · **weather zone**" if is_weather_hazard_type(ht) else ""
+                    aff = h.get("affected_radius_m")
+                    aff_txt = f" · zone ~{int(aff)} m" if aff else ""
                     st.markdown(
-                        f"- **#{h['id']}** {h.get('hazard_type')} · {h.get('severity')}{dist_txt}  \n"
+                        f"- **#{h['id']}** {ht} · {h.get('severity')}{dist_txt}{wx}{aff_txt}  \n"
                         f"  {h.get('location')}"
                     )
             else:
@@ -1106,6 +1150,20 @@ def _grokbot_file_from_image(
     attach_image(report_id, path, digest)
     st.session_state["focus_report_id"] = report_id
     note = f" (You said: {user_text[:120]})" if user_text.strip() else ""
+    if ticket.is_weather_hazard():
+        radius_m = int(weather_affected_radius_m(ticket.severity))
+        return (
+            f"Filed **weather hazard #{report_id}**{note}.\n\n"
+            f"- **Hazard:** {ticket.hazard_type}\n"
+            f"- **Severity:** {ticket.severity.value}\n"
+            f"- **Affected area:** ~{radius_m} m radius on the map\n"
+            f"- **Where:** {location}\n\n"
+            f"{ticket.summary}\n\n"
+            "Pinned on the **Live map** with a weather zone circle. "
+            "**No agency email** was sent — weather can’t be “fixed” by a city inbox. "
+            "Neighbors with near-me / a11y alerts get a warning if they’re in range, "
+            "plus safety-area directions. Want to log another issue?"
+        )
     return (
         f"Filed **open report #{report_id}**{note}.\n\n"
         f"- **Hazard:** {ticket.hazard_type}\n"
@@ -1113,7 +1171,8 @@ def _grokbot_file_from_image(
         f"- **Agency:** {ticket.agency}\n"
         f"- **Where:** {location}\n\n"
         f"{ticket.summary}\n\n"
-        "It’s pinned on the **Live map**. Want to log another issue?"
+        "It’s pinned on the **Live map**. Constructional / infrastructure hazards "
+        "can use the agency email path on the Report page. Want to log another issue?"
     )
 
 
