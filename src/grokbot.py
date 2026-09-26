@@ -13,9 +13,11 @@ maps open issues, catches duplicates, and helps vulnerable New Yorkers during fl
 
 You help residents and teammates with:
 - How to report hazards (any type: potholes, floods, curb cuts / pedestrian ramps, signals, etc.)
-- Using location sharing, the live map, and duplicate "issue already logged" messages
-- Accessibility: basement flood early warnings, limited mobility, Access-A-Ride timing,
-  calling 311 for evacuation transport, electric medical equipment power risk
+- Using location sharing (opt-in), the live map, and duplicate "issue already logged" messages
+- Accessibility: voice guidance / TTS (Grok Voice or Gemini), spoken hazard-area alerts when
+  someone enters a flood or open-hazard zone, basement flood early warnings, limited mobility,
+  Access-A-Ride timing, calling 311 for evacuation transport, electric medical equipment power risk
+- Switching AI engines in the sidebar: Grok vs Gemini for photo scanning and text-to-speech
 - Troubleshooting app errors (GPS permission, Mock AI toggle, missing API keys, map pins)
 - Pointing to official NYC resources: 311, Know Your Zone (nyc.gov/knowyourzone),
   NYC Emergency Management, FloodNet, MTA Access-A-Ride — without inventing fake phone trees
@@ -56,6 +58,15 @@ def mock_reply(user_text: str) -> str:
             "**Live map:** Open issues show as pins on a street map. Select a pin below the map "
             "to see the photo. **Mark resolved** removes it from the open view. "
             "Add `GOOGLE_MAPS_API_KEY` for the full Google Maps experience.\n\n"
+            "*(Mock GrokBot.)*"
+        )
+    if "voice" in q or "speak" in q or "tts" in q or "blind" in q or "visually" in q:
+        return (
+            "**Voice & accessibility:** In the sidebar, turn on **Voice guidance** and "
+            "**Spoken hazard-area alerts**. Choose **Grok** or **Gemini** as the dominant AI "
+            "for photo scanning and text-to-speech. On **Report** / **Safety**, opt into "
+            "**location sharing** so we can announce when you enter a flood or open-hazard zone. "
+            "GrokBot replies are also spoken aloud when Voice guidance is on.\n\n"
             "*(Mock GrokBot.)*"
         )
     if "error" in q or "broken" in q or "work" in q or "fix" in q:

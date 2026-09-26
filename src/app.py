@@ -19,6 +19,12 @@ ROOT = Path(__file__).resolve().parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from ai_provider import (  # noqa: E402
+    alert_voice_enabled,
+    get_provider,
+    location_consent,
+    voice_enabled,
+)
 from db import (  # noqa: E402
     attach_image,
     db_status,
@@ -39,14 +45,13 @@ from evacuation import (  # noqa: E402
     nearest_centers,
 )
 from flood_risk import RESOURCES as FLOOD_LINKS, assess_flood_risk  # noqa: E402
+from geo_alerts import alert_fingerprint, build_area_alerts  # noqa: E402
 from geo_services import (  # noqa: E402
     fast_location_choices,
     google_maps_api_key,
     reverse_geocode,
     strip_choice_meta,
 )
-from grok_client import analyze_hazard, check_duplicate_issue  # noqa: E402
-from grokbot import chat_once  # noqa: E402
 from map_view import render_incident_map  # noqa: E402
 from media import image_sha256, read_image_bytes, save_report_image  # noqa: E402
 from models import DispatchTicket  # noqa: E402
@@ -60,6 +65,12 @@ from notify import (  # noqa: E402
 from nyc_areas import NYC_BOROUGHS  # noqa: E402
 from safety_profile import SafetyProfile, load_profile, save_profile  # noqa: E402
 from theme import apply_theme  # noqa: E402
+from tts import speak_and_play  # noqa: E402
+from vision_router import (  # noqa: E402
+    analyze_hazard_routed,
+    chat_routed,
+    check_duplicate_routed,
+)
 
 try:
     from streamlit_geolocation import streamlit_geolocation
@@ -86,22 +97,56 @@ def _boot() -> None:
 
 
 def settings_rail() -> tuple[bool, str]:
-    has_key = bool(
-        os.getenv("XAI_API_KEY") and os.getenv("XAI_API_KEY") != "your_xai_api_key_here"
+    has_grok = bool(
+        os.getenv("XAI_API_KEY") and not os.getenv("XAI_API_KEY", "").startswith("your_")
+    )
+    has_gemini = bool(
+        (os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or "").strip()
+        and not (os.getenv("GEMINI_API_KEY") or "").startswith("your_")
     )
     with st.sidebar:
         st.markdown("### UrbanPulse")
         st.caption("Hack the City · DivHacks")
+
+        st.markdown("#### AI engine")
+        provider = get_provider()
+        st.caption(
+            f"Active: **{provider.upper()}** · set in `.env` via `ACTIVE_AI` "
+            f"(comment out the line you don’t want) · "
+            f"Grok key {'✓' if has_grok else '✗'} · Gemini key {'✓' if has_gemini else '✗'}"
+        )
+
         use_mock = st.toggle(
-            "Mock AI (no Grok calls)",
-            value=not has_key,
-            help="Turn off when XAI_API_KEY is set for live vision + duplicate checks.",
+            "Mock AI (no cloud vision/chat)",
+            value=not (has_grok or has_gemini),
+            help="Offline demo replies. Turn off when API keys are set.",
         )
         model = st.text_input(
-            "Grok model",
+            "Grok chat/vision model",
             value=os.getenv("GROK_MODEL", "grok-4.7"),
-            disabled=use_mock,
+            disabled=use_mock or provider != "grok",
         )
+
+        st.markdown("#### Accessibility")
+        st.toggle(
+            "Voice guidance (TTS)",
+            value=st.session_state.get("a11y_voice", True),
+            key="a11y_voice",
+            help="Speak GrokBot answers and key confirmations aloud.",
+        )
+        st.toggle(
+            "Spoken hazard-area alerts",
+            value=st.session_state.get("a11y_alert_voice", True),
+            key="a11y_alert_voice",
+            help="When location is shared, announce flood/open-hazard zones you enter.",
+        )
+        st.toggle(
+            "Browser voice backup",
+            value=st.session_state.get("a11y_browser_backup", True),
+            key="a11y_browser_backup",
+            help="Also use the phone’s built-in speech if cloud TTS is blocked.",
+        )
+
         status = db_status()
         if status.get("ok"):
             st.caption(
@@ -110,6 +155,34 @@ def settings_rail() -> tuple[bool, str]:
             )
         st.divider()
     return use_mock, model
+
+
+def _maybe_speak(text: str, *, use_mock: bool, force_alert: bool = False) -> None:
+    if force_alert:
+        if not alert_voice_enabled():
+            return
+    elif not voice_enabled():
+        return
+    speak_and_play(text, provider=get_provider(), use_mock=use_mock)
+
+
+def _run_geofence_alerts(lat: float, lon: float, *, use_mock: bool) -> None:
+    """Speak when the user enters a flood / open-hazard zone (consent required)."""
+    if not location_consent() or not alert_voice_enabled():
+        return
+    profile = load_profile()
+    lines = build_area_alerts(lat, lon, profile)
+    if not lines:
+        return
+    fp = alert_fingerprint(lines, lat, lon)
+    if st.session_state.get("last_alert_fp") == fp:
+        return
+    st.session_state["last_alert_fp"] = fp
+    spoken = " ".join(lines)
+    st.warning("Hazard-area alert (spoken)")
+    for line in lines:
+        st.markdown(f"- {line}")
+    _maybe_speak(spoken, use_mock=use_mock, force_alert=True)
 
 
 # ---------- location picker (shared) ----------
@@ -147,17 +220,42 @@ def _coords_from_browser(geo: object) -> tuple[float, float] | None:
         return None
 
 
-def location_picker() -> tuple[str, float | None, float | None]:
+def location_consent_controls(*, key_prefix: str = "report") -> bool:
+    """Opt-in location sharing for filing + spoken geofence alerts."""
+    del key_prefix  # reserved for future per-page labels
+    st.markdown("#### Location sharing")
+    if "location_consent" not in st.session_state:
+        st.session_state["location_consent"] = False
+    consented = st.toggle(
+        "I allow UrbanPulse to use my location",
+        key="location_consent",
+        help=(
+            "Required for GPS filing, nearby duplicate checks, and spoken hazard-area alerts "
+            "(flood / open hazards). You can turn this off anytime."
+        ),
+    )
+    if not consented:
+        st.caption(
+            "Location is off. You can still type an intersection or pick a neighborhood "
+            "without sharing live GPS. Spoken area alerts stay disabled until you opt in."
+        )
+    return bool(consented)
+
+
+def location_picker(*, use_mock: bool = False, key_prefix: str = "report") -> tuple[str, float | None, float | None]:
     st.markdown("#### Where is it?")
+    consented = location_consent_controls(key_prefix=key_prefix)
     st.caption(
-        "On your phone: tap **Share my location** → Allow. "
+        "On your phone: allow location below, then tap **Share my location**. "
         "We pull GPS once and resolve the address quickly "
         + ("(Google)" if google_maps_api_key() else "(add GOOGLE_MAPS_API_KEY for Google addresses)")
         + "."
     )
 
     st.markdown("**1 · Share my exact location**")
-    if streamlit_geolocation is not None:
+    if not consented:
+        st.info("Turn on **I allow UrbanPulse to use my location** to enable GPS sharing.")
+    elif streamlit_geolocation is not None:
         try:
             geo = streamlit_geolocation()
             browser_coords = _coords_from_browser(geo)
@@ -188,14 +286,16 @@ def location_picker() -> tuple[str, float | None, float | None]:
     boroughs = list(NYC_BOROUGHS.keys())
     bcol, ncol, lcol = st.columns([1, 1.4, 1])
     with bcol:
-        borough = st.selectbox("Borough", options=boroughs, index=0)
+        borough = st.selectbox("Borough", options=boroughs, index=0, key=f"{key_prefix}_boro")
     with ncol:
         hoods = list(NYC_BOROUGHS[borough].keys())
-        neighborhood = st.selectbox("Neighborhood", options=hoods)
+        neighborhood = st.selectbox(
+            "Neighborhood", options=hoods, key=f"{key_prefix}_hood"
+        )
     with lcol:
         st.write("")
         st.write("")
-        if st.button("Use this area", use_container_width=True):
+        if st.button("Use this area", use_container_width=True, key=f"{key_prefix}_use_area"):
             pin = NYC_BOROUGHS[borough][neighborhood]
             st.session_state.pop("nearby_cache_key", None)
             label = f"{borough} · {neighborhood}"
@@ -210,13 +310,21 @@ def location_picker() -> tuple[str, float | None, float | None]:
     with st.expander("Advanced: type GPS"):
         c1, c2, c3 = st.columns(3)
         with c1:
-            lat = st.number_input("Latitude", value=40.7580, format="%.5f", key="manual_lat")
+            lat = st.number_input(
+                "Latitude", value=40.7580, format="%.5f", key=f"{key_prefix}_manual_lat"
+            )
         with c2:
-            lon = st.number_input("Longitude", value=-73.9855, format="%.5f", key="manual_lon")
+            lon = st.number_input(
+                "Longitude", value=-73.9855, format="%.5f", key=f"{key_prefix}_manual_lon"
+            )
         with c3:
             st.write("")
             st.write("")
-            if st.button("Use typed coordinates", use_container_width=True):
+            if st.button(
+                "Use typed coordinates",
+                use_container_width=True,
+                key=f"{key_prefix}_use_gps",
+            ):
                 st.session_state.pop("nearby_cache_key", None)
                 addr = reverse_geocode(float(lat), float(lon))
                 st.session_state["gps"] = {
@@ -238,11 +346,18 @@ def location_picker() -> tuple[str, float | None, float | None]:
             st.info(warn)
         choices = st.session_state.get("nearby_choices") or []
         if choices:
-            picked = st.selectbox("Confirm place near you", options=choices)
+            picked = st.selectbox(
+                "Confirm place near you",
+                options=choices,
+                key=f"{key_prefix}_nearby_pick",
+            )
             clean = strip_choice_meta(picked)
             if st.session_state.get("last_nearby_pick") != picked:
                 st.session_state["location_manual"] = clean
                 st.session_state["last_nearby_pick"] = picked
+        # Spoken geofence when user opted into location + hazard voice alerts
+        if consented:
+            _run_geofence_alerts(lat_out, lon_out, use_mock=use_mock)
 
     if "location_manual" not in st.session_state:
         st.session_state["location_manual"] = ""
@@ -320,7 +435,7 @@ def find_duplicate(
     use_mock: bool,
     model: str,
 ) -> dict | None:
-    """Return matching open report dict if Grok (or hash) says same issue."""
+    """Return matching open report dict if active AI (or hash) says same issue."""
     digest = image_sha256(image_bytes)
     by_hash = find_open_by_hash(digest)
     if by_hash:
@@ -332,19 +447,18 @@ def find_duplicate(
     if not candidates:
         return None
 
+    provider = get_provider()
     for cand in candidates:
         existing_bytes = read_image_bytes(cand.get("image_path"))
         if not existing_bytes:
-            # Location-only soft match when no image on file
-            if use_mock:
-                continue
             continue
         try:
-            verdict = check_duplicate_issue(
+            verdict = check_duplicate_routed(
                 image_bytes,
                 existing_bytes,
                 location,
                 cand.get("summary") or cand.get("hazard_type") or "",
+                provider=provider,
                 mime=mime,
                 use_mock=use_mock,
                 model=model,
@@ -375,8 +489,8 @@ def render_home() -> None:
           <p class="up-lede">
             Snap a street hazard — any kind — and we classify it, route it to the
             right city agency, and pin it on a live map so New Yorkers don’t file
-            the same issue twice. Built with accessibility in mind: flood early-warnings
-            for basement and limited-mobility neighbors, curb-cut reporting, and
+            the same issue twice. Built for accessibility: voice guidance, spoken
+            hazard-area alerts, flood early-warnings, curb-cut reporting, and
             evacuation help when storms hit.
           </p>
         </div>
@@ -395,10 +509,14 @@ def render_home() -> None:
 
     st.markdown("### How it works")
     x, y, z = st.columns(3)
-    x.markdown("**1 · Capture**\n\nPhoto + location (phone GPS or any NYC neighborhood).")
-    y.markdown("**2 · Classify**\n\nGrok reads the image: type, severity, agency — including curb cuts.")
+    x.markdown(
+        "**1 · Capture**\n\nPhoto + optional GPS (you choose location sharing) or any NYC neighborhood."
+    )
+    y.markdown(
+        "**2 · Classify + speak**\n\nGrok or Gemini scans the photo; TTS reads results aloud."
+    )
     z.markdown(
-        "**3 · Protect + chat**\n\nFlood alerts for vulnerable profiles, plus **GrokBot** for questions."
+        "**3 · Protect + chat**\n\nSpoken flood/hazard alerts when you enter a flagged area, plus GrokBot."
     )
 
     status = db_status()
@@ -411,14 +529,16 @@ def render_home() -> None:
 def render_report() -> None:
     _boot()
     use_mock, model = settings_rail()
+    provider = get_provider()
     st.markdown("## Report a hazard")
     st.caption(
         "Potholes, flooding, signals, dumping, scaffolding, trees, **defective curb cuts / "
-        "pedestrian ramps** — any street or accessibility issue counts."
+        "pedestrian ramps** — any street or accessibility issue counts. "
+        f"Vision engine: **{provider.upper()}** (switch `ACTIVE_AI` in `.env`)."
     )
 
     uploaded = st.file_uploader("Hazard photo", type=["jpg", "jpeg", "png", "webp"])
-    location, lat, lon = location_picker()
+    location, lat, lon = location_picker(use_mock=use_mock, key_prefix="report")
     go = st.button("Analyze & file", type="primary", use_container_width=True)
 
     if uploaded:
@@ -428,9 +548,11 @@ def render_report() -> None:
         return
     if not uploaded:
         st.error("Add a photo first.")
+        _maybe_speak("Please add a hazard photo first.", use_mock=use_mock)
         return
     if not location:
         st.error("Add a location.")
+        _maybe_speak("Please add a location for the hazard report.", use_mock=use_mock)
         return
     if lat is None or lon is None:
         st.warning(
@@ -468,14 +590,21 @@ def render_report() -> None:
             st.image(dup["image_path"], caption=f"Existing report #{dup['id']}")
         st.info("Open the Live map to see this pin. No duplicate ticket was created.")
         st.session_state["focus_report_id"] = dup["id"]
+        _maybe_speak(
+            f"This issue is already logged as report {dup['id']}, "
+            f"{dup.get('hazard_type') or 'hazard'}. No duplicate ticket was created.",
+            use_mock=use_mock,
+        )
         st.page_link(page_map, label="Show on live map", icon="🗺️")
         return
 
-    with st.spinner("Grok is classifying…" if not use_mock else "Mock classifier…"):
+    engine = provider.upper() if not use_mock else "Mock"
+    with st.spinner(f"{engine} is classifying…" if not use_mock else "Mock classifier…"):
         try:
-            ticket = analyze_hazard(
+            ticket = analyze_hazard_routed(
                 image_bytes,
                 location,
+                provider=provider,
                 mime=mime,
                 model=model,
                 use_mock=use_mock,
@@ -483,16 +612,18 @@ def render_report() -> None:
             )
         except Exception as exc:  # noqa: BLE001
             st.error(f"Analysis failed: {exc}")
+            _maybe_speak(f"Analysis failed. {exc}", use_mock=use_mock)
             return
 
     digest = image_sha256(image_bytes)
+    source = "mock" if use_mock else provider
     try:
         report_id = save_ticket(
             ticket,
             location,
             latitude=lat,
             longitude=lon,
-            source="mock" if use_mock else "grok",
+            source=source,
             image_hash=digest,
             status="open",
         )
@@ -504,6 +635,12 @@ def render_report() -> None:
 
     st.success(f"Filed as open report #{report_id} — pinned on the live map.")
     st.session_state["focus_report_id"] = report_id
+    _maybe_speak(
+        f"Hazard filed as report {report_id}. "
+        f"{ticket.hazard_type}. Severity {ticket.severity.value}. "
+        f"Routed to {ticket.agency}. {ticket.summary}",
+        use_mock=use_mock,
+    )
     render_ticket(ticket, location, report_id=report_id)
 
 
@@ -572,13 +709,40 @@ def render_map() -> None:
 
 def render_safety() -> None:
     _boot()
-    settings_rail()
+    use_mock, _model = settings_rail()
     st.markdown("## Safety & accessibility alerts")
     st.caption(
         "Hackathon focus: turn UrbanPulse from “report a pothole” into early protection for "
         "basement residents, limited-mobility New Yorkers, and people on electric medical devices. "
         "Official guidance: NYC Emergency Management + 311."
     )
+
+    st.markdown("### Voice hazard-area alerts")
+    st.write(
+        "If you opt into location sharing and enable **Spoken hazard-area alerts** in the sidebar, "
+        "UrbanPulse can announce when you enter a flood-flagged zone or an open mapped hazard — "
+        "for example: “You are in a hazard area flagged for flooding.”"
+    )
+    location_consent_controls(key_prefix="safety")
+    st.caption(
+        f"Spoken alerts: **{'on' if alert_voice_enabled() else 'off'}** · "
+        f"TTS engine: **{get_provider().upper()}** (`.env` ACTIVE_AI)"
+    )
+
+    st.markdown("#### Check alerts at my location now")
+    gps = st.session_state.get("gps")
+    if st.button("Check hazard alerts here", type="primary", use_container_width=True):
+        if not location_consent():
+            st.warning("Turn on location sharing above first.")
+        elif not gps:
+            st.warning("No pin yet — share GPS on Report or set a home area below, then check again.")
+        else:
+            st.session_state.pop("last_alert_fp", None)
+            _run_geofence_alerts(
+                float(gps["latitude"]), float(gps["longitude"]), use_mock=use_mock
+            )
+            if not alert_voice_enabled():
+                st.info("Enable **Spoken hazard-area alerts** in the sidebar to hear the announcement.")
 
     profile = load_profile()
     st.markdown("### Your safety profile")
@@ -641,6 +805,10 @@ def render_safety() -> None:
         save_profile(updated)
         profile = updated
         st.success("Profile saved.")
+        _maybe_speak(
+            "Safety profile saved. Flood and power alerts will use your preferences.",
+            use_mock=use_mock,
+        )
 
     st.divider()
     st.markdown("### 1 · Early flood / basement warnings")
@@ -660,6 +828,11 @@ def render_safety() -> None:
             st.info("No urgent flood signal from the demo sensors right now.")
         for msg in assessment.messages:
             st.markdown(f"- {msg}")
+        if assessment.messages and (
+            assessment.priority_alert or profile.notify_early_flood
+        ):
+            if st.button("Read flood assessment aloud"):
+                _maybe_speak(" ".join(assessment.messages), use_mock=use_mock, force_alert=True)
         st.markdown(
             f"Cross-check official tools: "
             f"[Know Your Zone]({FLOOD_LINKS['know_your_zone']}) · "
@@ -702,7 +875,7 @@ def render_safety() -> None:
     )
     st.markdown(
         "- On **Report**, upload a photo of a damaged / missing curb cut.  \n"
-        "- Grok is prompted to label **defective pedestrian ramp / curb cut** and route to **DOT**.  \n"
+        "- Active AI (Grok or Gemini) labels **defective pedestrian ramp / curb cut** → **DOT**.  \n"
         "- Mock tip: name a file like `curb_ramp.jpg` to demo without an API key."
     )
     st.page_link(page_report, label="Report a curb cut or other hazard", icon="📷")
@@ -724,10 +897,12 @@ def render_safety() -> None:
 def render_grokbot() -> None:
     _boot()
     use_mock, model = settings_rail()
+    provider = get_provider()
     st.markdown("## GrokBot")
     st.caption(
-        "Your smart AI guide for UrbanPulse — ask how to report hazards, read the map, "
-        "use Safety alerts, or troubleshoot errors. Powered by Grok when Mock AI is off."
+        f"Your smart AI guide for UrbanPulse — ask how to report hazards, read the map, "
+        f"use Safety alerts, or troubleshoot errors. Active engine: **{provider.upper()}** "
+        f"(`.env` ACTIVE_AI). Replies can be read aloud when Voice guidance is on."
     )
 
     if "grokbot_messages" not in st.session_state:
@@ -737,7 +912,7 @@ def render_grokbot() -> None:
                 "content": (
                     "Hi — I'm **GrokBot**. Ask me about reporting (including curb cuts), "
                     "the live map, flood/basement alerts, Access-A-Ride / 311 evacuation help, "
-                    "or fixing app issues."
+                    "voice alerts, or fixing app issues. I can also speak my answers aloud."
                 ),
             }
         ]
@@ -759,6 +934,11 @@ def render_grokbot() -> None:
                 st.session_state["grokbot_tip"] = tip
                 st.rerun()
 
+    speak_replies = voice_enabled()
+    st.caption(
+        f"Voice guidance: **{'on' if speak_replies else 'off'}** — toggle in the sidebar under Accessibility."
+    )
+
     prompt = st.session_state.pop("grokbot_tip", None) or st.chat_input("Ask GrokBot…")
 
     if prompt:
@@ -766,24 +946,27 @@ def render_grokbot() -> None:
         with st.chat_message("user"):
             st.markdown(prompt)
         with st.chat_message("assistant"):
-            with st.spinner("GrokBot is thinking…" if not use_mock else "Mock GrokBot…"):
+            label = provider.upper() if not use_mock else "Mock"
+            with st.spinner(f"{label} GrokBot is thinking…" if not use_mock else "Mock GrokBot…"):
                 try:
-                    # Exclude the just-appended user msg duplication: chat_once uses full list
-                    reply = chat_once(
+                    reply = chat_routed(
                         [
                             m
                             for m in st.session_state["grokbot_messages"]
                             if m["role"] in ("user", "assistant")
                         ],
+                        provider=provider,
                         use_mock=use_mock,
                         model=model,
                     )
                 except Exception as exc:  # noqa: BLE001
                     reply = (
-                        f"I hit an error talking to Grok: `{exc}`\n\n"
-                        "Check `XAI_API_KEY` in `.env`, or turn **Mock AI** on in the sidebar."
+                        f"I hit an error talking to {provider}: `{exc}`\n\n"
+                        "Check `XAI_API_KEY` / `GEMINI_API_KEY` in `.env`, "
+                        "or turn **Mock AI** on in the sidebar."
                     )
                 st.markdown(reply)
+                _maybe_speak(reply, use_mock=use_mock)
         st.session_state["grokbot_messages"].append({"role": "assistant", "content": reply})
 
     if st.button("Clear chat"):
