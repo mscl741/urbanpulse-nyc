@@ -26,6 +26,7 @@ def analyze_hazard_routed(
     model: str | None = None,
     use_mock: bool = False,
     filename: str | None = None,
+    weather_context: str | None = None,
 ) -> DispatchTicket:
     if provider == "gemini":
         return analyze_hazard_gemini(
@@ -34,6 +35,7 @@ def analyze_hazard_routed(
             mime=mime,
             use_mock=use_mock,
             filename=filename,
+            weather_context=weather_context,
         )
     return analyze_hazard_grok(
         image_bytes,
@@ -42,6 +44,7 @@ def analyze_hazard_routed(
         model=model,
         use_mock=use_mock,
         filename=filename,
+        weather_context=weather_context,
     )
 
 

@@ -104,6 +104,10 @@ Return ONLY valid JSON:
 Rules:
 - Route to the NYC agency that owns the hazard.
 - Draft a polite resident email including the location string.
+- If weather-aid context is provided (recent rain / humidity), use it only as supporting
+  evidence for flooding or wet pavement — never invent flooding that is not visible in the photo.
+  When water on the street is visible AND recent rain is elevated, prefer hazard_type like
+  "street flooding" or "standing water", agency DEP, and raise severity appropriately.
 - If the photo does NOT show a clear civic street / sidewalk / building-exterior hazard
   (e.g. selfie, indoor room, food, unrelated object, blank sky), set:
   hazard_type to "no hazard detected", confidence <= 0.25, severity "low", agency "Other",

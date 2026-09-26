@@ -46,8 +46,9 @@ from evacuation import (  # noqa: E402
     assistance_blurb,
     nearest_centers,
 )
-from flood_risk import RESOURCES as FLOOD_LINKS, assess_flood_risk  # noqa: E402
+from flood_risk import RESOURCES as FLOOD_LINKS, assess_flood_risk, neighborhood_hint_coords  # noqa: E402
 from geo_alerts import alert_fingerprint, build_area_alerts, scan_nearby_hazards  # noqa: E402
+from nasa_weather import weather_context_for_point  # noqa: E402
 from geo_services import (  # noqa: E402
     fast_location_choices,
     google_maps_api_key,
@@ -626,6 +627,13 @@ def render_report() -> None:
 
     with st.spinner("Reviewing your photo…" if not use_mock else "Preparing a demo classification…"):
         try:
+            # Resolve coords for NASA weather aid when GPS wasn't shared
+            wx_lat, wx_lon = lat, lon
+            if (wx_lat is None or wx_lon is None) and location:
+                hint = neighborhood_hint_coords(location)
+                if hint:
+                    wx_lat, wx_lon = hint
+            weather_ctx = weather_context_for_point(wx_lat, wx_lon) or None
             ticket = analyze_hazard_routed(
                 image_bytes,
                 location,
@@ -634,6 +642,7 @@ def render_report() -> None:
                 model=model,
                 use_mock=use_mock,
                 filename=uploaded.name,
+                weather_context=weather_ctx,
             )
         except Exception:  # noqa: BLE001
             st.error(
@@ -917,7 +926,8 @@ def render_safety() -> None:
     st.write(
         "People in basement apartments or with limited mobility are among those most at risk "
         "in flash floods. If heavy rain is building, it is safer to move early rather than wait "
-        "for a last-minute official alert."
+        "for a last-minute official alert. UrbanPulse combines neighborhood flood pins, "
+        "short-range rain forecast, and **NASA satellite rain observations** as a weather aid."
     )
     if home_lat is not None and home_lon is not None:
         st.caption(f"Checking risk near: **{home_label or f'{home_lat:.4f}, {home_lon:.4f}'}**")
@@ -927,7 +937,7 @@ def render_safety() -> None:
         elif assessment.heavy_rain_likely or assessment.in_hotspot:
             st.warning("Elevated flood attention for this area.")
         else:
-            st.info("No urgent flood signal from the demo sensors right now.")
+            st.info("No urgent flood signal from weather aids right now.")
         for msg in assessment.messages:
             st.markdown(f"- {msg}")
         if assessment.messages and (
@@ -1011,6 +1021,12 @@ def _grokbot_file_from_image(
     user_text: str,
 ) -> str:
     """Analyze photo; file only when a real hazard is recognized."""
+    wx_lat, wx_lon = lat, lon
+    if (wx_lat is None or wx_lon is None) and location:
+        hint = neighborhood_hint_coords(location)
+        if hint:
+            wx_lat, wx_lon = hint
+    weather_ctx = weather_context_for_point(wx_lat, wx_lon) or None
     ticket = analyze_hazard_routed(
         image_bytes,
         location,
@@ -1019,6 +1035,7 @@ def _grokbot_file_from_image(
         model=model,
         use_mock=use_mock,
         filename=filename,
+        weather_context=weather_ctx,
     )
     if not ticket.is_recognized_hazard():
         return (
@@ -1214,6 +1231,27 @@ def render_grokbot() -> None:
                             for m in st.session_state["grokbot_messages"]
                             if m["role"] in ("user", "assistant")
                         ]
+                        # Attach NASA weather aid when the user is asking about floods / rain
+                        qlow = prompt.lower()
+                        if any(
+                            k in qlow
+                            for k in ("flood", "rain", "storm", "basement", "weather", "wet")
+                        ):
+                            wx_lat = float(gps["latitude"]) if gps.get("latitude") is not None else None
+                            wx_lon = float(gps["longitude"]) if gps.get("longitude") is not None else None
+                            if wx_lat is None or wx_lon is None:
+                                hint = neighborhood_hint_coords(
+                                    (bot_location or st.session_state.get("location_manual") or "").strip()
+                                )
+                                if hint:
+                                    wx_lat, wx_lon = hint
+                            wx = weather_context_for_point(wx_lat, wx_lon)
+                            if wx and history:
+                                history = list(history)
+                                history[-1] = {
+                                    "role": history[-1]["role"],
+                                    "content": history[-1]["content"] + "\n\n" + wx,
+                                }
                         reply = chat_routed(
                             history,
                             provider=provider,

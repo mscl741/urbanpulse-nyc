@@ -97,6 +97,7 @@ def analyze_hazard(
     model: str | None = None,
     use_mock: bool = False,
     filename: str | None = None,
+    weather_context: str | None = None,
 ) -> DispatchTicket:
     if use_mock:
         return mock_analyze(location, filename)
@@ -104,6 +105,7 @@ def analyze_hazard(
     model_name = model or os.getenv("GROK_MODEL", "grok-4.7")
     client = _client()
     data_url = image_to_data_url(image_bytes, mime=mime)
+    weather_block = f"\n\n{weather_context.strip()}" if weather_context and weather_context.strip() else ""
 
     response = client.chat.completions.create(
         model=model_name,
@@ -120,6 +122,7 @@ def analyze_hazard(
                             f"Intersection / location: {location}\n"
                             "Classify this urban hazard photo into the required JSON. "
                             "Any civic hazard type is valid."
+                            f"{weather_block}"
                         ),
                     },
                     {"type": "image_url", "image_url": {"url": data_url}},

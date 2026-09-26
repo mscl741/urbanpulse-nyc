@@ -18,6 +18,9 @@ You help residents and teammates with:
 - Using location sharing (opt-in), the live map, and duplicate "issue already logged" messages
 - Accessibility: basement flood early warnings, limited mobility, Access-A-Ride / 311 evacuation help
 - Pointing to official NYC resources: 311, Know Your Zone, OEM, FloodNet, Access-A-Ride
+- Explaining flood / rain heads-ups that blend neighborhood flood pins, short-range forecasts,
+  and NASA satellite rain observations (describe this simply as "satellite weather" — never
+  mention API keys, model names, or internal config)
 
 When discussing a photo the app already classified:
 - If no civic hazard (sunset, selfie, food, indoor unrelated scene), clearly say there are
@@ -50,9 +53,9 @@ def mock_reply(user_text: str) -> str:
         return (
             "**Flood / basement safety:** Open **Near-me & safety**, turn on basement or "
             "limited-mobility flags, set your home neighborhood, and Save. UrbanPulse checks "
-            "nearby flood hotspots + short-range rain forecast and can raise a priority alert "
-            "so you can move early. Also use [Know Your Zone](https://www.nyc.gov/knowyourzone) "
-            "and call **311** in a real emergency."
+            "nearby flood hotspots, short-range rain forecast, and satellite rain observations, "
+            "then can raise a priority alert so you can move early. Also use "
+            "[Know Your Zone](https://www.nyc.gov/knowyourzone) and call **311** in a real emergency."
         )
     if "map" in q or "pin" in q:
         return (

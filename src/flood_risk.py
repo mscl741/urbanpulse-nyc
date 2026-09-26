@@ -3,7 +3,8 @@ Flood / storm risk helpers for UrbanPulse accessibility alerts.
 
 Uses:
 - Static NYC flood-prone neighborhood pins (hackathon-friendly proxy for Flood Hazard Mapper)
-- Optional live precipitation forecast via Open-Meteo (no API key)
+- Live precipitation forecast via Open-Meteo (no API key)
+- NASA POWER satellite weather aid (observed rain / humidity / wind — no API key)
 - Official NYC OEM / FloodNet references shown in the UI
 """
 
@@ -14,6 +15,7 @@ from typing import Any
 
 import requests
 
+from nasa_weather import NasaWeatherAid, fetch_nasa_weather
 from nyc_areas import NYC_BOROUGHS, haversine_m
 from safety_profile import SafetyProfile
 
@@ -51,9 +53,13 @@ class FloodAssessment:
     hotspot_level: str | None
     distance_m: float | None
     precip_next_6h_mm: float | None
+    precip_observed_24h_mm: float | None
+    precip_observed_3d_mm: float | None
     heavy_rain_likely: bool
+    wet_ground_signal: bool
     priority_alert: bool
     messages: list[str]
+    nasa: NasaWeatherAid | None = None
 
 
 def nearest_hotspot(lat: float, lon: float, *, radius_m: float = 2500.0) -> tuple[dict | None, float | None]:
@@ -99,7 +105,10 @@ def assess_flood_risk(
 ) -> FloodAssessment:
     spot, dist = nearest_hotspot(lat, lon)
     precip = forecast_precip_mm(lat, lon)
-    heavy = precip is not None and precip >= 8.0  # mm in ~6h — early threshold
+    nasa = fetch_nasa_weather(lat, lon)
+    forecast_heavy = precip is not None and precip >= 8.0  # mm in ~6h — early threshold
+    observed_wet = bool(nasa.available and nasa.wet_signal)
+    heavy = forecast_heavy or observed_wet
     in_hotspot = spot is not None
     messages: list[str] = []
 
@@ -114,33 +123,42 @@ def assess_flood_risk(
             "[Know Your Zone](https://www.nyc.gov/knowyourzone) for official coastal zones."
         )
 
+    messages.extend(nasa.public_lines())
+
     if precip is not None:
-        messages.append(f"Forecast precipitation (next ~6 hours): **{precip:.1f} mm**.")
-        if heavy:
+        messages.append(f"Forecast rain (next ~6 hours): **{precip:.1f} mm**.")
+        if forecast_heavy:
             messages.append(
-                "Rain looks elevated. For basement apartments and limited mobility, "
+                "Rain looks elevated ahead. For basement apartments and limited mobility, "
                 "NYC OEM notes it is safer to move early rather than wait for a late alert."
             )
     else:
-        messages.append("Live rain forecast unavailable right now — check weather + OEM alerts.")
+        messages.append("Short-range rain forecast unavailable right now — check OEM alerts.")
 
-    if profile.lives_in_basement and (in_hotspot or heavy):
+    if observed_wet and not forecast_heavy:
+        messages.append(
+            "Recent satellite rain is already elevated even if the next few hours look quieter — "
+            "watch for ponding and basement seepage."
+        )
+
+    wet_or_hot = in_hotspot or heavy
+    if profile.lives_in_basement and wet_or_hot:
         messages.append(
             "**Basement / low-lying residence:** flash-flood water rises fast downstairs — "
             "prioritize early relocation if rain is building."
         )
-    if profile.limited_mobility and (in_hotspot or heavy):
+    if profile.limited_mobility and wet_or_hot:
         messages.append(
             "**Limited mobility:** leave extra lead time. Access-A-Ride and other transit "
             "may shut down hours before a storm (NYC Emergency Management)."
         )
-    if profile.depends_on_medical_power and (in_hotspot or heavy):
+    if profile.depends_on_medical_power and wet_or_hot:
         messages.append(
             "**Electric medical equipment:** flooding can trigger local outages — "
             "charge devices, pack backup batteries/meds, and plan a powered destination."
         )
 
-    priority = profile.is_high_priority() and (in_hotspot or heavy) and (
+    priority = profile.is_high_priority() and wet_or_hot and (
         profile.notify_early_flood or profile.notify_power_risk
     )
 
@@ -150,9 +168,13 @@ def assess_flood_risk(
         hotspot_level=spot["level"] if spot else None,
         distance_m=dist,
         precip_next_6h_mm=precip,
+        precip_observed_24h_mm=nasa.precip_last_24h_mm,
+        precip_observed_3d_mm=nasa.precip_last_3d_mm,
         heavy_rain_likely=bool(heavy),
+        wet_ground_signal=observed_wet,
         priority_alert=bool(priority),
         messages=messages,
+        nasa=nasa if nasa.available else None,
     )
 
 

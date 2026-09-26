@@ -59,10 +59,12 @@ def analyze_hazard_gemini(
     mime: str = "image/jpeg",
     use_mock: bool = False,
     filename: str | None = None,
+    weather_context: str | None = None,
 ) -> DispatchTicket:
     if use_mock:
         return mock_analyze(location, filename)
     b64 = base64.b64encode(image_bytes).decode("utf-8")
+    weather_block = f"\n\n{weather_context.strip()}" if weather_context and weather_context.strip() else ""
     raw = _generate(
         [
             {
@@ -70,6 +72,7 @@ def analyze_hazard_gemini(
                     f"Intersection / location: {location}\n"
                     "Classify this urban hazard photo into the required JSON. "
                     "Any civic hazard type is valid, including curb cuts."
+                    f"{weather_block}"
                 )
             },
             {"inline_data": {"mime_type": mime, "data": b64}},
