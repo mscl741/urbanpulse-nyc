@@ -1,0 +1,32 @@
+services:
+  - type: web
+    name: urbanpulse-nyc
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run src/app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: ACTIVE_AI
+        value: grok
+      - key: XAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      - key: GROK_MODEL
+        value: grok-4.7
+      - key: GEMINI_VISION_MODEL
+        value: gemini-2.0-flash
+      - key: GEMINI_CHAT_MODEL
+        value: gemini-2.0-flash
+      - key: GEMINI_TTS_MODEL
+        value: gemini-2.5-flash-preview-tts
+      - key: GEMINI_TTS_VOICE
+        value: Kore
+      - key: NOTIFY_PLACEHOLDER_TO
+        value: urbanpulse-mock@example.com

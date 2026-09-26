@@ -4,6 +4,6 @@
 .DS_Store
 .streamlit/secrets.toml
 urbanpulse.db
-data/outbound_mail/
+data/
 spectrum/node_modules/
 spectrum/dist/
