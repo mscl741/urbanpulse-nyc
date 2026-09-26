@@ -14,7 +14,8 @@ OVERPASS_ENDPOINTS = [
     "https://overpass-api.de/api/interpreter",
 ]
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse"
-USER_AGENT = "UrbanPulseNYC/0.1 (DivHacks civic reporting; student project)"
+USER_AGENT = "UrbanPulseNYC/1.0 (accessibility civic reporting; contact: urbanpulse)"
+
 MILES_TO_METERS = 1609.34
 
 

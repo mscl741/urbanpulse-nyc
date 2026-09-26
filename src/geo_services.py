@@ -9,7 +9,8 @@ import requests
 
 from nyc_areas import neighborhoods_near
 
-USER_AGENT = "UrbanPulseNYC/0.1 (DivHacks; student project)"
+USER_AGENT = "UrbanPulseNYC/1.0 (accessibility civic reporting; contact: urbanpulse)"
+
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/reverse"
 GOOGLE_GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json"
 

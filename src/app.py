@@ -118,7 +118,7 @@ def settings_rail() -> tuple[bool, str]:
 
     with st.sidebar:
         st.markdown("### UrbanPulse")
-        st.caption("Civic reporting for New York")
+        st.caption("Accessibility & safety for New Yorkers")
 
         st.markdown("#### Accessibility")
         st.toggle(
@@ -513,7 +513,7 @@ def render_home() -> None:
     st.markdown(
         """
         <div class="up-hero">
-          <div class="up-kicker">Civic reporting for New York</div>
+          <div class="up-kicker">Accessibility &amp; safety for New York</div>
           <h1 class="up-brand">UrbanPulse<br/><span>NYC</span></h1>
           <p class="up-lede">
             Snap a street hazard — any kind — and we classify it, route it to the
@@ -760,9 +760,8 @@ def render_safety() -> None:
     use_mock, _model = settings_rail()
     st.markdown("## Safety & accessibility alerts")
     st.caption(
-        "Hackathon focus: turn UrbanPulse from “report a pothole” into early protection for "
-        "basement residents, limited-mobility New Yorkers, and people on electric medical devices. "
-        "Official guidance: NYC Emergency Management + 311."
+        "Early protection for basement residents, limited-mobility New Yorkers, and people "
+        "who rely on electric medical devices. Official guidance: NYC Emergency Management + 311."
     )
 
     st.markdown("### Scan for hazards near me")
@@ -967,7 +966,7 @@ def render_safety() -> None:
     if home_lat is not None and home_lon is not None:
         st.markdown("#### Nearby demo evacuation pins")
         st.caption(
-            "These are illustrative campus/area pins for the hackathon map — "
+            "These are nearby area pins for planning — "
             "**always confirm open/accessible status with 311 or Know Your Zone during a real event.**"
         )
         for sug in nearest_centers(home_lat, home_lon, limit=3):
@@ -988,8 +987,7 @@ def render_safety() -> None:
     )
     st.markdown(
         "- On **Report**, upload a photo of a damaged / missing curb cut.  \n"
-        "- UrbanPulse labels **defective pedestrian ramp / curb cut** and routes it to **DOT**.  \n"
-        "- Tip: in demo mode, name a file like `curb_ramp.jpg` to try the category."
+        "- UrbanPulse labels **defective pedestrian ramp / curb cut** and routes it to **DOT**."
     )
     st.page_link(page_report, label="Report a curb cut or other hazard", icon="📷")
 
@@ -1309,9 +1307,11 @@ page_ops = st.Page(render_ops, title="Ops", icon="📊")
 
 
 def main() -> None:
-    nav = st.navigation(
-        [page_home, page_report, page_map, page_safety, page_bot, page_ops]
-    )
+    # Ops is staff-only — clients never see it unless SHOW_OPS=1 is set on the server.
+    pages = [page_home, page_report, page_map, page_safety, page_bot]
+    if os.getenv("SHOW_OPS", "").strip().lower() in {"1", "true", "yes"}:
+        pages.append(page_ops)
+    nav = st.navigation(pages)
     nav.run()
 
 

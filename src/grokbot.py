@@ -7,9 +7,9 @@ from typing import Any
 
 from openai import OpenAI
 
-GROKBOT_SYSTEM = """You are Hazard Helper, the in-app assistant for UrbanPulse NYC — a DivHacks
-"Hack the City" civic app that turns hazard photos into municipal dispatch tickets,
-maps open issues, catches duplicates, and helps vulnerable New Yorkers during floods.
+GROKBOT_SYSTEM = """You are Hazard Helper, the in-app assistant for UrbanPulse NYC — an
+accessibility-focused civic app that helps New Yorkers report street hazards, map open issues,
+catch duplicates, and get early flood / evacuation support when storms hit.
 
 You help residents and teammates with:
 - How to report hazards (any type: potholes, floods, curb cuts / pedestrian ramps, signals, etc.)
