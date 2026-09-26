@@ -45,8 +45,8 @@ def mock_reply(user_text: str) -> str:
     if "curb" in q or "ramp" in q:
         return (
             "**Curb cuts / pedestrian ramps:** On **Report**, upload a photo of the broken "
-            "or missing ramp. We’ll label it for **DOT** when possible. For a quick demo, "
-            "name the file something like `curb_ramp.jpg`.\n\n"
+            "or missing ramp. We’ll label it for **DOT** when possible. Take a clear photo "
+            "of the ramp from the sidewalk so the damage or missing cut is visible.\n\n"
             "Need more help? Ask me how to use the live map or near-me scan."
         )
     if "flood" in q or "basement" in q:
