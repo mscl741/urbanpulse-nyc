@@ -87,11 +87,20 @@ st.set_page_config(
     page_title="UrbanPulse NYC",
     page_icon="🗽",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
 def _boot() -> None:
     apply_theme()
+    st.markdown(
+        """
+        <div class="up-topbrand">
+          <div class="name">UrbanPulse <span>NYC</span></div>
+          <div class="tag">Accessibility</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     try:
         if "_db_bootstrapped" not in st.session_state:
             init_db()
@@ -101,7 +110,7 @@ def _boot() -> None:
 
 
 def settings_rail() -> tuple[bool, str]:
-    """Sidebar: public-friendly controls only (no API/vendor jargon)."""
+    """Sidebar: accessibility controls only (pages live in the top nav)."""
     has_cloud = bool(
         (
             os.getenv("XAI_API_KEY")
@@ -117,10 +126,9 @@ def settings_rail() -> tuple[bool, str]:
     model = os.getenv("GROK_MODEL", "grok-4.7")
 
     with st.sidebar:
-        st.markdown("### UrbanPulse")
-        st.caption("Accessibility & safety for New Yorkers")
+        st.markdown("### Voice & accessibility")
+        st.caption("Optional — turn on only if you want the app to speak.")
 
-        st.markdown("#### Accessibility")
         st.toggle(
             "Enable voice services",
             value=st.session_state.get("a11y_voice_master", False),
@@ -541,13 +549,17 @@ def render_home() -> None:
         """
         <div class="up-hero">
           <div class="up-kicker">Accessibility &amp; safety for New York</div>
-          <h1 class="up-brand">UrbanPulse<br/><span>NYC</span></h1>
+          <h1 class="up-brand">UrbanPulse <span>NYC</span></h1>
           <p class="up-lede">
-            Snap a street hazard — any kind — and we classify it, route it to the
-            right city agency, and pin it on a live map so New Yorkers don’t file
-            the same issue twice. Built for accessibility: voice guidance, spoken
-            hazard-area alerts, flood early-warnings, curb-cut reporting, and
-            evacuation help when storms hit.
+            See a street problem? Snap a photo, tell us where it is, and UrbanPulse
+            helps turn it into a clear city report — then pins it on a live map so
+            neighbors don’t file the same issue twice.
+          </p>
+          <p class="up-lede-sub">
+            Start with <strong>Report</strong> to file a hazard (pothole, flood, broken curb cut,
+            signal, dumping, and more). Use <strong>Live map</strong> to see open pins.
+            Open <strong>Near-me &amp; safety</strong> for flood heads-ups and a nearby hazard scan.
+            Ask <strong>Hazard Helper</strong> if you want guidance — voice is optional in the sidebar.
           </p>
         </div>
         """,
@@ -1347,7 +1359,11 @@ def main() -> None:
     pages = [page_home, page_report, page_map, page_safety, page_bot]
     if os.getenv("SHOW_OPS", "").strip().lower() in {"1", "true", "yes"}:
         pages.append(page_ops)
-    nav = st.navigation(pages)
+    try:
+        nav = st.navigation(pages, position="top")
+    except TypeError:
+        # Older Streamlit without top nav — fall back to sidebar pages.
+        nav = st.navigation(pages)
     nav.run()
 
 
