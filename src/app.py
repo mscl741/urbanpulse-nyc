@@ -102,7 +102,6 @@ def _boot() -> None:
         """,
         unsafe_allow_html=True,
     )
-    _page_switcher()
     try:
         if "_db_bootstrapped" not in st.session_state:
             init_db()
@@ -111,29 +110,25 @@ def _boot() -> None:
         st.sidebar.error(f"DB init failed: {exc}")
 
 
-def _page_switcher() -> None:
-    """In-page page links — Streamlit moves top nav into the sidebar on phones."""
-    # page_* objects are defined at module import time before any page runs.
+def _sidebar_page_links() -> None:
+    """Single page menu inside the right-hand menu panel (desktop + phone)."""
     items = [
         (page_home, "Home", "🏠"),
         (page_report, "Report", "📷"),
         (page_map, "Live map", "🗺️"),
-        (page_safety, "Near-me", "♿"),
-        (page_bot, "Helper", "🛟"),
+        (page_safety, "Near-me & safety", "♿"),
+        (page_bot, "Hazard Helper", "🛟"),
     ]
     if os.getenv("SHOW_OPS", "").strip().lower() in {"1", "true", "yes"}:
         items.append((page_ops, "Ops", "📊"))
-    st.markdown(
-        '<div class="up-mnav" aria-label="Page navigation">Pages</div>',
-        unsafe_allow_html=True,
-    )
-    cols = st.columns(len(items))
-    for col, (page, label, icon) in zip(cols, items):
-        with col:
-            st.page_link(page, label=label, icon=icon, use_container_width=True)
+    st.markdown("### Pages")
+    st.caption("Open any section from this menu.")
+    for page, label, icon in items:
+        st.page_link(page, label=label, icon=icon, use_container_width=True)
+
 
 def settings_rail() -> tuple[bool, str]:
-    """Sidebar: accessibility controls only (pages live in the top nav)."""
+    """Right-side menu: pages + voice / accessibility controls."""
     has_cloud = bool(
         (
             os.getenv("XAI_API_KEY")
@@ -149,6 +144,8 @@ def settings_rail() -> tuple[bool, str]:
     model = os.getenv("GROK_MODEL", "grok-4.7")
 
     with st.sidebar:
+        _sidebar_page_links()
+        st.divider()
         st.markdown("### Voice & accessibility")
         st.caption("Optional — turn on only if you want the app to speak.")
 
@@ -1551,10 +1548,10 @@ def main() -> None:
     pages = [page_home, page_report, page_map, page_safety, page_bot]
     if os.getenv("SHOW_OPS", "").strip().lower() in {"1", "true", "yes"}:
         pages.append(page_ops)
+    # Hidden built-in nav — pages live once in the right-hand menu panel.
     try:
-        nav = st.navigation(pages, position="top")
+        nav = st.navigation(pages, position="hidden")
     except TypeError:
-        # Older Streamlit without top nav — fall back to sidebar pages.
         nav = st.navigation(pages)
     nav.run()
 

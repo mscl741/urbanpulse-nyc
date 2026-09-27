@@ -153,10 +153,10 @@ span[data-testid="stIconMaterial"],
   color: var(--up-ink) !important;
   visibility: visible !important;
 }
-/* Fallback chevron if the icon font still fails */
+/* Fallback chevron if the icon font still fails (panel is on the right) */
 [data-testid="collapsedControl"]::after,
 [data-testid="stSidebarCollapsedControl"]::after {
-  content: "‹";
+  content: "›";
   position: absolute;
   font-size: 1.6rem !important;
   line-height: 1;
@@ -193,8 +193,8 @@ span[data-testid="stIconMaterial"],
 }
 
 .block-container {
-  /* Clear sticky top nav so UrbanPulse NYC brand is never clipped */
-  padding-top: 3.25rem !important;
+  /* Brand sits near the top — menu opens from the right arrow */
+  padding-top: 1.75rem !important;
   padding-bottom: 3rem !important;
   padding-left: 1.75rem !important;
   padding-right: 1.75rem !important;
@@ -204,90 +204,62 @@ section.main > div {
   padding-top: 0.5rem !important;
 }
 
-/* —— Top navigation —— */
-/* Desktop: pages live in the header. On mobile Streamlit moves them into the
-   sidebar — so we must NOT hide stSidebarNav on narrow screens. */
+/* —— Built-in Streamlit page nav: always hidden (custom Pages list in menu) —— */
 [data-testid="stSidebarNav"] { display: none !important; }
-@media (max-width: 768px) {
-  [data-testid="stSidebarNav"] {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 0.35rem !important;
-    padding: 0.5rem 0.75rem 1rem !important;
-    border-bottom: 1px solid var(--up-line) !important;
-    margin-bottom: 0.75rem !important;
-  }
-  [data-testid="stSidebarNav"] a,
-  [data-testid="stSidebarNav"] [data-testid="stPageLink-NavLink"] {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    font-family: var(--up-font) !important;
-    font-weight: 600 !important;
-    color: var(--up-ink) !important;
-    border-radius: 999px !important;
-    padding: 0.45rem 0.75rem !important;
-  }
+[data-testid="stHeader"] nav,
+[data-testid="stHeader"] [data-testid="stPageLink-NavLink"],
+header[data-testid="stHeader"] [data-testid="stToolbar"] a[data-testid="stPageLink-NavLink"] {
+  display: none !important;
 }
 [data-testid="stHeader"] [data-testid="stToolbarActions"],
 header [data-testid="stLogoSpacer"] { display: none !important; }
 
-/* Keep header page links visible + scrollable when top nav is shown */
-header[data-testid="stHeader"] nav,
-[data-testid="stHeader"] [data-testid="stToolbar"] {
-  overflow-x: auto !important;
-  overflow-y: hidden !important;
-  -webkit-overflow-scrolling: touch;
-  flex-wrap: nowrap !important;
-  max-width: 100% !important;
+/* —— Menu panel on the RIGHT (matches the reopen arrow) —— */
+[data-testid="stAppViewContainer"] {
+  flex-direction: row-reverse !important;
 }
-[data-testid="stHeader"] a,
-[data-testid="stHeader"] [data-testid="stPageLink-NavLink"] {
-  flex-shrink: 0 !important;
-  white-space: nowrap !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  color: var(--up-ink) !important;
-  font-family: var(--up-font) !important;
-  font-weight: 600 !important;
-  font-size: 0.92rem !important;
-}
-
-/* In-page page switcher — reliable on phones (top nav relocates to sidebar) */
-.up-mnav {
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--up-faint);
-  margin: 0 0 0.35rem 0;
-}
-div[data-testid="stVerticalBlock"] > div:has(.up-mnav) + div[data-testid="stHorizontalBlock"] {
-  margin-bottom: 0.85rem !important;
-  gap: 0.35rem !important;
-}
-div[data-testid="stVerticalBlock"] > div:has(.up-mnav) + div[data-testid="stHorizontalBlock"] a[data-testid="stPageLink-NavLink"] {
-  font-size: 0.8rem !important;
-  padding: 0.45rem 0.4rem !important;
-  justify-content: center !important;
-  text-align: center !important;
+section[data-testid="stSidebar"] {
   background: var(--up-surface) !important;
-  border: 1px solid var(--up-line) !important;
-  border-radius: 999px !important;
-  box-shadow: none !important;
-  color: var(--up-ink) !important;
+  border-left: 1px solid var(--up-line) !important;
+  border-right: none !important;
+  order: 2 !important;
 }
-
-/* Sidebar = accessibility controls only */
-[data-testid="stSidebar"] {
-  background: var(--up-surface) !important;
-  border-right: 1px solid var(--up-line) !important;
+section.main {
+  order: 1 !important;
 }
 [data-testid="stSidebar"] > div:first-child {
   padding-top: 1.25rem;
 }
 [data-testid="stSidebar"] * {
   font-family: var(--up-font) !important;
+}
+/* Page links inside the right menu */
+[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
+  border-radius: 999px !important;
+  border: 1px solid var(--up-line) !important;
+  background: var(--up-surface) !important;
+  color: var(--up-ink) !important;
+  font-weight: 600 !important;
+  margin: 0.2rem 0 !important;
+  box-shadow: none !important;
+}
+[data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"]:hover {
+  border-color: rgba(79, 70, 229, 0.35) !important;
+  background: var(--up-accent-soft) !important;
+}
+
+/* Reopen control: fixed on the right, same place desktop + phone */
+[data-testid="collapsedControl"],
+[data-testid="stExpandSidebarButton"],
+[data-testid="stSidebarCollapsedControl"] {
+  top: 1rem !important;
+  right: 0.85rem !important;
+  left: auto !important;
+}
+/* Chevron points toward the panel on the right */
+[data-testid="collapsedControl"]::after,
+[data-testid="stSidebarCollapsedControl"]::after {
+  content: "›";
 }
 
 /* —— Typography —— */
@@ -635,7 +607,7 @@ iframe {
 /* —— Mobile —— */
 @media (max-width: 768px) {
   .block-container {
-    padding-top: 3rem !important;
+    padding-top: 1.5rem !important;
     padding-left: 1rem !important;
     padding-right: 1rem !important;
   }
@@ -645,7 +617,7 @@ iframe {
   [data-testid="collapsedControl"],
   [data-testid="stExpandSidebarButton"],
   [data-testid="stSidebarCollapsedControl"] {
-    top: 5.25rem !important;
+    top: 0.85rem !important;
     right: 0.65rem !important;
     left: auto !important;
   }
