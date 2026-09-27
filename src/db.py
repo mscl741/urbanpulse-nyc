@@ -13,6 +13,7 @@ from sqlalchemy import (
     DateTime,
     Float,
     Integer,
+    LargeBinary,
     MetaData,
     String,
     Text,
@@ -67,6 +68,9 @@ class HazardReport(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="open", index=True)
     image_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     image_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    # Durable photo bytes in Tiger — Render local disk is ephemeral across deploys.
+    image_blob: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    image_mime: Mapped[str | None] = mapped_column(String(64), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Weather hazards: affected-area radius (meters) around the pin for near-me alerts.
     affected_radius_m: Mapped[float | None] = mapped_column(Float, nullable=True)
@@ -136,6 +140,8 @@ def _row_dict(r: HazardReport) -> dict[str, Any]:
         "status": r.status or "open",
         "image_path": r.image_path,
         "image_hash": r.image_hash,
+        "has_image": bool(r.image_blob) or bool(r.image_path),
+        "image_mime": r.image_mime,
         "email_status": r.email_status,
         "email_to": r.email_to,
         "email_method": r.email_method,
@@ -215,6 +221,8 @@ def _migrate_columns(engine: Engine) -> None:
         "ALTER TABLE hazard_reports ADD COLUMN status VARCHAR(20) DEFAULT 'open'",
         "ALTER TABLE hazard_reports ADD COLUMN image_path VARCHAR(512)",
         "ALTER TABLE hazard_reports ADD COLUMN image_hash VARCHAR(64)",
+        "ALTER TABLE hazard_reports ADD COLUMN image_blob BYTEA",
+        "ALTER TABLE hazard_reports ADD COLUMN image_mime VARCHAR(64)",
         "ALTER TABLE hazard_reports ADD COLUMN resolved_at TIMESTAMP",
         "ALTER TABLE hazard_reports ADD COLUMN affected_radius_m FLOAT",
     ]
@@ -319,14 +327,54 @@ def _get_report_row(session, report_id: int) -> HazardReport | None:
     ).first()
 
 
-def attach_image(report_id: int, image_path: str, image_hash: str) -> None:
+def attach_image(
+    report_id: int,
+    image_path: str,
+    image_hash: str,
+    *,
+    image_bytes: bytes | None = None,
+    mime: str | None = None,
+) -> None:
+    """Attach photo metadata + durable blob (Tiger) so pins keep images after redeploys."""
     ensure_db()
+    stored: bytes | None = None
+    stored_mime: str | None = mime
+    if image_bytes:
+        from media import prepare_image_for_storage
+
+        stored, stored_mime = prepare_image_for_storage(image_bytes, mime=mime or "image/jpeg")
     with session_scope() as session:
         row = _get_report_row(session, report_id)
         if row is None:
             raise ValueError(f"No report #{report_id}")
         row.image_path = image_path
         row.image_hash = image_hash
+        if stored is not None:
+            row.image_blob = stored
+            row.image_mime = stored_mime
+
+
+def load_report_image(report_id: int) -> tuple[bytes, str] | None:
+    """Load photo bytes for a report — Tiger blob first, then local path cache."""
+    ensure_db()
+    with session_scope() as session:
+        row = _get_report_row(session, report_id)
+        if row is None:
+            return None
+        if row.image_blob:
+            mime = (row.image_mime or "image/jpeg").strip() or "image/jpeg"
+            return bytes(row.image_blob), mime
+        path = row.image_path
+    if not path:
+        return None
+    from media import read_image_bytes
+
+    data = read_image_bytes(path)
+    if not data:
+        return None
+    lower = path.lower()
+    mime = "image/png" if lower.endswith(".png") else "image/webp" if lower.endswith(".webp") else "image/jpeg"
+    return data, mime
 
 
 def resolve_ticket(report_id: int) -> None:

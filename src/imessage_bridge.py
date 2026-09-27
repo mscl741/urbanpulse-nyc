@@ -27,6 +27,7 @@ from db import (  # noqa: E402
     ensure_db,
     find_open_by_hash,
     get_ticket,
+    load_report_image,
     nearby_open_reports,
     save_ticket,
 )
@@ -236,7 +237,15 @@ def _matching_open_report(
     model = os.getenv("GROK_MODEL") or "grok-4.7"
     provider = get_provider()
     for cand in nearby_open_reports(lat, lon, radius_m=120.0, limit=6):
-        existing = read_image_bytes(cand.get("image_path"))
+        existing = None
+        try:
+            loaded = load_report_image(int(cand["id"]))
+            if loaded:
+                existing = loaded[0]
+        except Exception:
+            existing = None
+        if not existing:
+            existing = read_image_bytes(cand.get("image_path"))
         if not existing:
             continue
         try:
@@ -328,7 +337,7 @@ def file_photo_report(
         status="open",
     )
     path = save_report_image(report_id, image_bytes, mime=mime)
-    attach_image(report_id, path, digest)
+    attach_image(report_id, path, digest, image_bytes=image_bytes, mime=mime)
     return (
         f"Filed report #{report_id}: {ticket.hazard_type} at {location}. "
         f"Severity {ticket.severity.value}."

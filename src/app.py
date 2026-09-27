@@ -33,6 +33,7 @@ from db import (  # noqa: E402
     find_open_by_hash,
     get_ticket,
     init_db,
+    load_report_image,
     map_tickets,
     mark_email_sent,
     nearby_open_reports,
@@ -528,7 +529,15 @@ def find_duplicate(
 
     provider = get_provider()
     for cand in candidates:
-        existing_bytes = read_image_bytes(cand.get("image_path"))
+        existing_bytes = None
+        try:
+            loaded = load_report_image(int(cand["id"]))
+            if loaded:
+                existing_bytes = loaded[0]
+        except Exception:
+            existing_bytes = None
+        if not existing_bytes:
+            existing_bytes = read_image_bytes(cand.get("image_path"))
         if not existing_bytes:
             continue
         try:
@@ -737,6 +746,10 @@ def render_report() -> None:
         )
         if dup.get("image_path") and Path(dup["image_path"]).exists():
             st.image(dup["image_path"], caption=f"Existing report #{dup['id']}")
+        else:
+            loaded = load_report_image(int(dup["id"]))
+            if loaded:
+                st.image(loaded[0], caption=f"Existing report #{dup['id']}")
         st.info("Open the Live map to see this pin. No duplicate ticket was created.")
         st.session_state["focus_report_id"] = dup["id"]
         _maybe_speak(
@@ -798,7 +811,7 @@ def render_report() -> None:
             status="open",
         )
         path = save_report_image(report_id, image_bytes, mime=mime)
-        attach_image(report_id, path, digest)
+        attach_image(report_id, path, digest, image_bytes=image_bytes, mime=mime)
     except Exception:  # noqa: BLE001
         st.error("Couldn’t save that report right now. Please try again in a moment.")
         return
@@ -918,11 +931,15 @@ def render_map() -> None:
         else:
             st.caption(f"Resolved at {detail.get('resolved_at')}")
     with right:
-        img = detail.get("image_path")
-        if img and Path(img).exists():
-            st.image(img, use_container_width=True)
+        loaded = load_report_image(int(detail["id"]))
+        if loaded:
+            st.image(loaded[0], use_container_width=True)
         else:
-            st.info("No photo on file for this pin.")
+            st.info(
+                "No photo on file for this pin. "
+                "(Older uploads may have been lost when the free server restarted — "
+                "new reports keep photos in Tiger Data.)"
+            )
 
 
 def render_safety() -> None:
@@ -1234,7 +1251,7 @@ def _grokbot_file_from_image(
         status="open",
     )
     path = save_report_image(report_id, image_bytes, mime=mime)
-    attach_image(report_id, path, digest)
+    attach_image(report_id, path, digest, image_bytes=image_bytes, mime=mime)
     st.session_state["focus_report_id"] = report_id
     note = f" (You said: {user_text[:120]})" if user_text.strip() else ""
     if ticket.is_weather_hazard():
