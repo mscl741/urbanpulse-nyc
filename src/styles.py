@@ -121,7 +121,7 @@ span[data-testid="stIconMaterial"],
   color: var(--up-ink) !important;
 }
 
-/* Sidebar reopen: below top tabs and on the RIGHT so Home + brand stay clear */
+/* Sidebar reopen: top-LEFT corner (same on phone + desktop) */
 [data-testid="collapsedControl"],
 [data-testid="stExpandSidebarButton"],
 [data-testid="stSidebarCollapsedControl"] {
@@ -130,9 +130,9 @@ span[data-testid="stIconMaterial"],
   opacity: 1 !important;
   pointer-events: auto !important;
   position: fixed !important;
-  left: auto !important;
-  right: 0.85rem !important;
-  top: 4.75rem !important;
+  left: 0.85rem !important;
+  right: auto !important;
+  top: 0.85rem !important;
   z-index: 1000001 !important;
   width: 2.35rem !important;
   height: 2.35rem !important;
@@ -153,10 +153,10 @@ span[data-testid="stIconMaterial"],
   color: var(--up-ink) !important;
   visibility: visible !important;
 }
-/* Fallback chevron if the icon font still fails (panel is on the right) */
+/* Fallback chevron if the icon font still fails (panel opens from the left) */
 [data-testid="collapsedControl"]::after,
 [data-testid="stSidebarCollapsedControl"]::after {
-  content: "›";
+  content: "‹";
   position: absolute;
   font-size: 1.6rem !important;
   line-height: 1;
@@ -214,18 +214,11 @@ header[data-testid="stHeader"] [data-testid="stToolbar"] a[data-testid="stPageLi
 [data-testid="stHeader"] [data-testid="stToolbarActions"],
 header [data-testid="stLogoSpacer"] { display: none !important; }
 
-/* —— Menu panel on the RIGHT (matches the reopen arrow) —— */
-[data-testid="stAppViewContainer"] {
-  flex-direction: row-reverse !important;
-}
+/* —— Menu panel on the LEFT (matches the top-left reopen arrow) —— */
 section[data-testid="stSidebar"] {
   background: var(--up-surface) !important;
-  border-left: 1px solid var(--up-line) !important;
-  border-right: none !important;
-  order: 2 !important;
-}
-section.main {
-  order: 1 !important;
+  border-right: 1px solid var(--up-line) !important;
+  border-left: none !important;
 }
 [data-testid="stSidebar"] > div:first-child {
   padding-top: 1.25rem;
@@ -233,7 +226,7 @@ section.main {
 [data-testid="stSidebar"] * {
   font-family: var(--up-font) !important;
 }
-/* Page links inside the right menu */
+/* Page links inside the menu */
 [data-testid="stSidebar"] a[data-testid="stPageLink-NavLink"] {
   border-radius: 999px !important;
   border: 1px solid var(--up-line) !important;
@@ -248,18 +241,13 @@ section.main {
   background: var(--up-accent-soft) !important;
 }
 
-/* Reopen control: fixed on the right, same place desktop + phone */
+/* Reopen control stays top-left */
 [data-testid="collapsedControl"],
 [data-testid="stExpandSidebarButton"],
 [data-testid="stSidebarCollapsedControl"] {
-  top: 1rem !important;
-  right: 0.85rem !important;
-  left: auto !important;
-}
-/* Chevron points toward the panel on the right */
-[data-testid="collapsedControl"]::after,
-[data-testid="stSidebarCollapsedControl"]::after {
-  content: "›";
+  top: 0.85rem !important;
+  left: 0.85rem !important;
+  right: auto !important;
 }
 
 /* —— Typography —— */
@@ -617,9 +605,9 @@ iframe {
   [data-testid="collapsedControl"],
   [data-testid="stExpandSidebarButton"],
   [data-testid="stSidebarCollapsedControl"] {
-    top: 0.85rem !important;
-    right: 0.65rem !important;
-    left: auto !important;
+    top: 0.75rem !important;
+    left: 0.65rem !important;
+    right: auto !important;
   }
   [data-testid="stMetric"] {
     margin-bottom: 0.5rem;
