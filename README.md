@@ -19,6 +19,17 @@ Open http://localhost:8501
 
 Spectrum listens for iMessage and forwards hazard questions, text reports, and photos to the existing Python app. Nothing in this path is a second hazard database.
 
+**Public texting number:** **(628) 789-5365** — residents can iMessage this number from an iPhone. The home page of the live app also shows this number and how-to steps.
+
+Quick checks:
+
+| You send | What happens |
+|----------|----------------|
+| `Hello` | Reply: `Hello from UrbanPulse.` |
+| `What hazards are near Harlem?` | Near-me scan for that neighborhood |
+| `Report a large pothole at Broadway and W 116th St.` | Text report filed onto the live map |
+| Photo + caption `This is at Broadway and W 116th St.` | Vision classify + pin on the live map |
+
 From the repo root, in three terminals:
 
 ```powershell
@@ -53,6 +64,7 @@ On macOS or Linux, use `python -m venv .venv`, `source .venv/bin/activate`, `cp 
 | `SPECTRUM_PROJECT_ID` | For iMessage | Photon project id, in `spectrum/.env` |
 | `SPECTRUM_PROJECT_SECRET` | For iMessage | Photon project secret, in `spectrum/.env` |
 | `URBANPULSE_BRIDGE_URL` | No | Spectrum → bridge URL. Default `http://127.0.0.1:8766` |
+| `PHOTON_IMESSAGE_NUMBER` | No | Public text number shown on Home. Default `628-789-5365` |
 
 ## App tabs
 

@@ -557,6 +557,72 @@ def find_duplicate(
 # ---------- pages ----------
 
 
+def photon_imessage_number() -> str:
+    """Public Photon iMessage number people can text (override with env)."""
+    raw = (os.getenv("PHOTON_IMESSAGE_NUMBER") or "628-789-5365").strip()
+    return raw or "628-789-5365"
+
+
+def _render_photon_howto() -> None:
+    """Home-page guide: text Photon to ask about / file hazards."""
+    number = photon_imessage_number()
+    digits = "".join(ch for ch in number if ch.isdigit())
+    display = number
+    if len(digits) == 10:
+        display = f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+    tel = f"+1{digits}" if len(digits) == 10 else number
+    sms_href = f"sms:{tel}"
+
+    st.markdown(
+        f"""
+        <div class="up-photon">
+          <div class="up-kicker">Text UrbanPulse · Photon iMessage</div>
+          <h2 class="up-photon-title">Report by text — no app install</h2>
+          <p class="up-photon-lede">
+            Photon connects iMessage to the same UrbanPulse hazard system behind this website.
+            Text the number below from your iPhone. Replies come back as iMessages; filed issues
+            show up on the <strong>Live map</strong>.
+          </p>
+          <p class="up-photon-number">
+            <a href="{sms_href}">{display}</a>
+          </p>
+          <p class="up-photon-hint">Tap the number on your phone to open Messages · or save
+            <strong>{display}</strong> as “UrbanPulse NYC”.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("#### How to use Photon")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(
+            "**1 · Say hello**\n\n"
+            f"Text `Hello` to **{display}**.\n\n"
+            "You should get: *Hello from UrbanPulse.*"
+        )
+    with c2:
+        st.markdown(
+            "**2 · Ask what’s nearby**\n\n"
+            "Name a neighborhood, for example:\n\n"
+            "`What hazards are near Harlem?`\n\n"
+            "`Flood risk near Times Square`"
+        )
+    with c3:
+        st.markdown(
+            "**3 · File a hazard**\n\n"
+            "**Text only** — start with *Report* and include the place:\n\n"
+            "`Report a large pothole at Broadway and W 116th St.`\n\n"
+            "**Photo** — send a clear street photo in the **same message** as the location:\n\n"
+            "`This is at Broadway and W 116th St.` *(attach photo)*"
+        )
+    st.caption(
+        "Tips: use a real NYC street, intersection, or neighborhood so we can pin the map. "
+        "Weather issues (flooding) become map zones with alerts — constructional issues can still "
+        "route to city agencies. Same Tiger Data store as the website."
+    )
+
+
 def render_home() -> None:
     _boot()
     settings_rail()
@@ -575,6 +641,7 @@ def render_home() -> None:
             signal, dumping, and more). Use <strong>Live map</strong> to see open pins.
             Open <strong>Near-me &amp; safety</strong> for flood heads-ups and a nearby hazard scan.
             Ask <strong>Hazard Helper</strong> if you want guidance — voice is optional in the sidebar.
+            Or <strong>text Photon</strong> from your iPhone — the number is below.
           </p>
         </div>
         """,
@@ -601,6 +668,8 @@ def render_home() -> None:
     z.markdown(
         "**3 · Scan + chat**\n\nNear-me hazard scan, Hazard Helper with Speak + photo filing, flood alerts."
     )
+
+    _render_photon_howto()
 
     status = db_status()
     if status.get("ok"):

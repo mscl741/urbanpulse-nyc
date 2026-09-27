@@ -308,6 +308,47 @@ p, li, label, .stMarkdown, [data-testid="stCaption"] {
   margin-bottom: 0.55rem;
 }
 
+/* —— Photon / iMessage howto (home) —— */
+.up-photon {
+  margin: 2.1rem 0 1.1rem 0;
+  padding: 1.35rem 0 0.35rem 0;
+  border-top: 1px solid var(--up-line);
+}
+.up-photon-title {
+  font-size: clamp(1.45rem, 2.4vw, 1.85rem) !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.55rem 0 !important;
+  color: var(--up-ink) !important;
+}
+.up-photon-lede {
+  font-size: 1.02rem;
+  line-height: 1.55;
+  color: var(--up-muted);
+  max-width: 42rem;
+  margin: 0 0 1rem 0;
+}
+.up-photon-number {
+  margin: 0.35rem 0 0.45rem 0;
+  font-size: clamp(1.85rem, 4.2vw, 2.55rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+.up-photon-number a {
+  color: var(--up-accent) !important;
+  text-decoration: none !important;
+  border-bottom: 2px solid rgba(26, 115, 232, 0.25);
+}
+.up-photon-number a:hover {
+  border-bottom-color: var(--up-accent);
+}
+.up-photon-hint {
+  font-size: 0.92rem;
+  color: var(--up-faint);
+  margin: 0 0 0.85rem 0;
+}
+
 /* —— Cards / panels —— */
 .up-panel {
   border: 1px solid var(--up-line);
