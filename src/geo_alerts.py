@@ -85,12 +85,19 @@ def build_area_alerts(
         dist = h.get("distance_m")
         dist_txt = f" about {int(dist)} meters away" if dist is not None else ""
         if is_weather_hazard_type(str(hazard)):
+            aff_raw = h.get("affected_radius_m")
+            try:
+                aff = float(aff_raw) if aff_raw is not None else 0.0
+            except (TypeError, ValueError):
+                aff = 0.0
+            # Only treat as "entered zone" when inside the mapped weather radius.
+            if aff > 0 and dist is not None and float(dist) > aff:
+                continue
             weather_hit = True
-            aff = h.get("affected_radius_m")
             zone = f" Mapped weather zone about {int(aff)} meters." if aff else ""
             lines.append(
                 f"WARNING. Weather hazard nearby{dist_txt}: {hazard}, severity {sev}. "
-                f"You are in or near a mapped flood / standing-water zone at "
+                f"You are in a mapped flood / standing-water zone at "
                 f"{h.get('location') or 'this block'}.{zone}"
             )
         else:

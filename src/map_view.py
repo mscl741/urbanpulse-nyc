@@ -11,6 +11,7 @@ import streamlit.components.v1 as components
 from streamlit_folium import st_folium
 
 from geo_services import google_maps_api_key
+from models import is_weather_hazard_type, weather_affected_radius_m
 from styles import chart_colors
 
 _COLORS = chart_colors()
@@ -33,11 +34,23 @@ def _center(rows: list[dict[str, Any]]) -> tuple[float, float]:
 
 
 def _affected_radius(r: dict[str, Any]) -> float:
+    """Meters for weather-zone circle; infer from severity when DB radius missing."""
     try:
         val = float(r.get("affected_radius_m") or 0)
     except (TypeError, ValueError):
-        return 0.0
-    return val if val > 0 else 0.0
+        val = 0.0
+    if val > 0:
+        return val
+    if is_weather_hazard_type(str(r.get("hazard_type") or "")):
+        return weather_affected_radius_m(str(r.get("severity") or "medium"))
+    return 0.0
+
+
+def _pin_offset(i: int) -> tuple[float, float]:
+    """Tiny lat/lon nudge so stacked reports at the same block stay clickable."""
+    # ~12–25 m offsets in a small spiral
+    step = (i % 6) + 1
+    return (0.00011 * step * ((-1) ** i), 0.00009 * step * ((-1) ** (i // 2)))
 
 
 def render_incident_map(rows: list[dict[str, Any]], *, height: int = 560) -> None:
@@ -50,15 +63,17 @@ def render_incident_map(rows: list[dict[str, Any]], *, height: int = 560) -> Non
     if key:
         _google_maps(rows, key, height=height)
     else:
-        st.caption("Street map of open hazard reports across NYC.")
+        st.caption("Street map of open hazard reports across NYC — weather hazards show an affected-area ring.")
         _folium_streets(rows, height=height)
 
 
 def _folium_streets(rows: list[dict[str, Any]], *, height: int) -> None:
     lat, lon = _center(rows)
+    # Zoom tighter when a weather zone is present so the radius is obvious.
+    has_zone = any(_affected_radius(r) > 0 for r in rows)
     m = folium.Map(
         location=[lat, lon],
-        zoom_start=13,
+        zoom_start=14 if has_zone else 13,
         control_scale=True,
         tiles=None,
     )
@@ -80,13 +95,16 @@ def _folium_streets(rows: list[dict[str, Any]], *, height: int) -> None:
     ).add_to(m)
 
     accent = _COLORS["accent"]
-    for r in rows:
+    for i, r in enumerate(rows):
         color = (
             SEVERITY_COLOR["resolved"]
             if r.get("status") == "resolved"
             else SEVERITY_COLOR.get(str(r.get("severity", "medium")), _COLORS["medium"])
         )
         aff = _affected_radius(r)
+        dlat, dlon = _pin_offset(i)
+        plat = float(r["latitude"]) + dlat
+        plon = float(r["longitude"]) + dlon
         zone_note = (
             f"<br/><em>Weather zone · ~{int(aff)} m affected radius</em>"
             if aff > 0
@@ -102,26 +120,25 @@ def _folium_streets(rows: list[dict[str, Any]], *, height: int) -> None:
         tip = f"#{r['id']} {r.get('hazard_type', '')}"
         if aff > 0:
             tip += f" · weather zone {int(aff)} m"
-        if aff > 0:
             folium.Circle(
-                location=[float(r["latitude"]), float(r["longitude"])],
+                location=[plat, plon],
                 radius=aff,
                 color=color,
-                weight=1,
+                weight=3,
                 fill=True,
                 fill_color=color,
-                fill_opacity=0.18,
+                fill_opacity=0.28,
                 popup=folium.Popup(popup, max_width=280),
                 tooltip=tip,
             ).add_to(m)
         folium.CircleMarker(
-            location=[float(r["latitude"]), float(r["longitude"])],
-            radius=9,
-            color=accent,
-            weight=1.5,
+            location=[plat, plon],
+            radius=11 if aff > 0 else 9,
+            color="#FFFFFF" if aff > 0 else accent,
+            weight=2.5 if aff > 0 else 1.5,
             fill=True,
             fill_color=color,
-            fill_opacity=0.92,
+            fill_opacity=0.95,
             popup=folium.Popup(popup, max_width=280),
             tooltip=tip,
         ).add_to(m)
@@ -133,13 +150,14 @@ def _folium_streets(rows: list[dict[str, Any]], *, height: int) -> None:
 def _google_maps(rows: list[dict[str, Any]], api_key: str, *, height: int) -> None:
     lat, lon = _center(rows)
     markers = []
-    for r in rows:
+    for i, r in enumerate(rows):
         color = (
             SEVERITY_COLOR["resolved"]
             if r.get("status") == "resolved"
             else SEVERITY_COLOR.get(str(r.get("severity", "medium")), _COLORS["medium"])
         )
         aff = _affected_radius(r)
+        dlat, dlon = _pin_offset(i)
         body = (
             f"{r.get('severity', '')} · {r.get('status', '')}\\n"
             f"{r.get('location', '')}\\n"
@@ -150,8 +168,8 @@ def _google_maps(rows: list[dict[str, Any]], api_key: str, *, height: int) -> No
         markers.append(
             {
                 "id": r["id"],
-                "lat": float(r["latitude"]),
-                "lng": float(r["longitude"]),
+                "lat": float(r["latitude"]) + dlat,
+                "lng": float(r["longitude"]) + dlon,
                 "title": f"#{r['id']} {r.get('hazard_type', '')}",
                 "body": body,
                 "color": color,
@@ -161,6 +179,8 @@ def _google_maps(rows: list[dict[str, Any]], api_key: str, *, height: int) -> No
 
     markers_json = json.dumps(markers)
     accent = _COLORS["accent"]
+    has_zone = any(m["radius_m"] > 0 for m in markers)
+    start_zoom = 14 if has_zone else 13
     html = f"""
 <!DOCTYPE html>
 <html>
@@ -178,7 +198,7 @@ def _google_maps(rows: list[dict[str, Any]], api_key: str, *, height: int) -> No
     function initMap() {{
       const map = new google.maps.Map(document.getElementById("map"), {{
         center: {{ lat: {lat}, lng: {lon} }},
-        zoom: 13,
+        zoom: {start_zoom},
         mapTypeControl: true,
         streetViewControl: true,
         fullscreenControl: true,
@@ -199,16 +219,18 @@ def _google_maps(rows: list[dict[str, Any]], api_key: str, *, height: int) -> No
         const pos = {{ lat: m.lat, lng: m.lng }};
         bounds.extend(pos);
         if (m.radius_m && m.radius_m > 0) {{
-          new google.maps.Circle({{
+          const circle = new google.maps.Circle({{
             map,
             center: pos,
             radius: m.radius_m,
             strokeColor: m.color,
-            strokeOpacity: 0.55,
-            strokeWeight: 1,
+            strokeOpacity: 0.85,
+            strokeWeight: 2,
             fillColor: m.color,
-            fillOpacity: 0.18,
+            fillOpacity: 0.28,
           }});
+          const cBounds = circle.getBounds();
+          if (cBounds) bounds.union(cBounds);
         }}
         const marker = new google.maps.Marker({{
           position: pos,
@@ -216,11 +238,11 @@ def _google_maps(rows: list[dict[str, Any]], api_key: str, *, height: int) -> No
           title: m.title,
           icon: {{
             path: google.maps.SymbolPath.CIRCLE,
-            scale: 10,
+            scale: m.radius_m > 0 ? 12 : 10,
             fillColor: m.color,
             fillOpacity: 0.95,
-            strokeColor: "{accent}",
-            strokeWeight: 1.5,
+            strokeColor: m.radius_m > 0 ? "#ffffff" : "{accent}",
+            strokeWeight: 2,
           }},
         }});
         const info = new google.maps.InfoWindow({{
@@ -230,7 +252,7 @@ def _google_maps(rows: list[dict[str, Any]], api_key: str, *, height: int) -> No
         }});
         marker.addListener("click", () => info.open({{ map, anchor: marker }}));
       }});
-      if (MARKERS.length > 1) map.fitBounds(bounds, 48);
+      if (MARKERS.length > 0) map.fitBounds(bounds, 56);
     }}
   </script>
   <script async defer

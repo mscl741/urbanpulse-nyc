@@ -204,6 +204,10 @@ def init_db() -> dict[str, Any]:
                 info["hypertable_note"] = str(exc)
 
     _initialized = True
+    try:
+        _backfill_weather_radii(engine)
+    except Exception:
+        pass
     return info
 
 
@@ -270,10 +274,44 @@ def ensure_db() -> dict[str, Any]:
         _migrate_columns(get_engine())
     except Exception:
         pass
+    try:
+        _backfill_weather_radii(get_engine())
+    except Exception:
+        pass
     return {
         "url_scheme": database_url().split("://", 1)[0],
         "backend": "postgres" if is_postgres() else "sqlite",
     }
+
+
+def _backfill_weather_radii(engine: Engine) -> None:
+    """Ensure open weather pins have a visible affected_radius_m."""
+    with engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                "SELECT id, hazard_type, severity, affected_radius_m "
+                "FROM hazard_reports WHERE status = 'open'"
+            )
+        ).mappings().all()
+        for row in rows:
+            ht = str(row.get("hazard_type") or "")
+            if not is_weather_hazard_type(ht):
+                continue
+            current = row.get("affected_radius_m")
+            desired = weather_affected_radius_m(str(row.get("severity") or "medium"))
+            try:
+                cur_f = float(current) if current is not None else 0.0
+            except (TypeError, ValueError):
+                cur_f = 0.0
+            # Refresh if missing or still on the old smaller demo radii.
+            if cur_f <= 0 or cur_f < desired:
+                conn.execute(
+                    text(
+                        "UPDATE hazard_reports SET affected_radius_m = :r "
+                        "WHERE id = :id"
+                    ),
+                    {"r": desired, "id": int(row["id"])},
+                )
 
 
 def save_ticket(

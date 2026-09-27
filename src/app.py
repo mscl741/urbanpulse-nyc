@@ -1029,9 +1029,14 @@ def render_safety() -> None:
     st.divider()
     st.markdown("### Voice area alerts (when you move)")
     st.write(
-        "With location sharing + near-me speech enabled, UrbanPulse can announce when your pin "
-        "enters a flood-flagged zone or open hazard — for example: "
-        "“You are in a hazard area flagged for flooding.”"
+        "UrbanPulse does **not** send background phone push notifications. "
+        "Instead, when you **share a location pin** (or tap the buttons below), it checks whether "
+        "you are inside a mapped weather zone or near an open hazard and can **speak a warning** "
+        "if voice is on — e.g. “Weather warning — you are in a mapped flood zone.”"
+    )
+    st.caption(
+        "Demo flow: turn on location + Speak near-me scans → set your pin inside the flood ring on "
+        "Live map → **Run near-me scan** or **Check area alerts at current pin**."
     )
     if st.button("Check area alerts at current pin", use_container_width=True):
         if not location_consent():
@@ -1046,6 +1051,8 @@ def render_safety() -> None:
             )
             if not voice_for_scan():
                 st.info("Enable voice services → Speak near-me scans to hear alerts.")
+            elif not st.session_state.get("last_alert_fp"):
+                st.success("No hazard-area alert at this pin right now.")
 
     profile = load_profile()
     st.markdown("### Your safety profile")

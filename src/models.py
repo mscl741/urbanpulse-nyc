@@ -44,10 +44,11 @@ WEATHER_TOKENS = (
 )
 
 _WEATHER_RADIUS_M: dict[str, float] = {
-    "low": 100.0,
-    "medium": 200.0,
-    "high": 350.0,
-    "critical": 500.0,
+    # Sized so zones read clearly on the city Live map (demo-friendly).
+    "low": 400.0,
+    "medium": 800.0,
+    "high": 1200.0,
+    "critical": 2000.0,
 }
 
 
