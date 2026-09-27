@@ -1,5 +1,6 @@
 .venv/
 .env
+spectrum/.env
 *.pyc
 .DS_Store
 .streamlit/secrets.toml

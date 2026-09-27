@@ -1,5 +1,5 @@
 """
-UrbanPulse visual system — Material 3 × Apple HIG (look & feel only).
+UrbanPulse visual system — look & feel only.
 
 Call `load_css()` once per page (via `apply_theme()` / `_boot()`).
 No page logic, data, or navigation changes live here.
@@ -9,34 +9,35 @@ from __future__ import annotations
 
 import streamlit as st
 
-# Friendly palette for maps / status (shared with map_view)
-ACCENT = "#1A73E8"
-STATUS_GREEN = "#34A853"
-STATUS_AMBER = "#FBBC04"
-STATUS_CORAL = "#EA4335"
-STATUS_MUTED = "#9AA0A6"
+# Shared with maps / status charts — mostly neutrals; accent reserved for identity
+ACCENT = "#4F46E5"
+STATUS_GREEN = "#10B981"
+STATUS_AMBER = "#D97706"
+STATUS_CORAL = "#DC2626"
+STATUS_MUTED = "#94A3B8"
 
 CSS = """
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,500&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;700;800&family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap');
 
 :root {
-  --up-bg: #F4F7FC;
+  /* ~75% neutral · ~18% primary · ~7% accent */
+  --up-bg: #F8FAFC;
   --up-surface: #FFFFFF;
-  --up-ink: #12263A;
-  --up-muted: #4A6278;
-  --up-faint: #7A90A4;
-  --up-line: rgba(18, 38, 58, 0.10);
-  --up-accent: #1A73E8;
-  --up-accent-soft: #E8F0FE;
-  --up-green: #34A853;
-  --up-amber: #FBBC04;
-  --up-coral: #EA4335;
-  --up-teal: #0D9488;
-  --up-violet: #7C3AED;
-  --up-radius: 18px;
+  --up-ink: #0F172A;
+  --up-muted: #475569;
+  --up-faint: #64748B;
+  --up-line: rgba(15, 23, 42, 0.08);
+  --up-accent: #4F46E5;
+  --up-accent-soft: #EEF2FF;
+  --up-accent-2: #7C3AED;
+  --up-green: #10B981;
+  --up-amber: #D97706;
+  --up-coral: #DC2626;
+  --up-radius: 16px;
   --up-radius-sm: 12px;
-  --up-shadow: 0 1px 2px rgba(18, 38, 58, 0.06), 0 8px 24px rgba(18, 38, 58, 0.06);
-  --up-font: "DM Sans", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --up-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 6px 18px rgba(15, 23, 42, 0.05);
+  --up-font: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --up-font-display: "Outfit", "Plus Jakarta Sans", sans-serif;
 }
 
 html, body, [class*="css"], .stApp, [data-testid="stAppViewContainer"] {
@@ -45,10 +46,10 @@ html, body, [class*="css"], .stApp, [data-testid="stAppViewContainer"] {
 }
 
 .stApp {
+  /* Quiet off-white — light navy wash only, no rainbow floods */
   background:
-    radial-gradient(1200px 500px at 10% -10%, rgba(26, 115, 232, 0.14), transparent 55%),
-    radial-gradient(900px 420px at 95% 0%, rgba(13, 148, 136, 0.12), transparent 50%),
-    radial-gradient(700px 380px at 70% 100%, rgba(124, 58, 237, 0.08), transparent 45%),
+    radial-gradient(1000px 420px at 8% -8%, rgba(79, 70, 229, 0.06), transparent 55%),
+    radial-gradient(800px 360px at 100% 0%, rgba(124, 58, 237, 0.04), transparent 50%),
     var(--up-bg) !important;
 }
 
@@ -61,7 +62,7 @@ div[data-testid="stStatusWidget"] { display: none !important; }
 
 /* Top brand + nav bar — roomy so tabs don't clip page brand */
 header[data-testid="stHeader"] {
-  background: rgba(255, 255, 255, 0.96) !important;
+  background: rgba(248, 250, 252, 0.92) !important;
   backdrop-filter: blur(10px);
   height: auto !important;
   min-height: 3.75rem !important;
@@ -138,9 +139,9 @@ span[data-testid="stIconMaterial"],
   align-items: center !important;
   justify-content: center !important;
   background: #ffffff !important;
-  border: 1px solid rgba(32, 33, 36, 0.12) !important;
+  border: 1px solid var(--up-line) !important;
   border-radius: 12px !important;
-  box-shadow: 0 2px 10px rgba(18, 38, 58, 0.12) !important;
+  box-shadow: var(--up-shadow) !important;
   font-size: 0 !important; /* hide any leftover raw icon-name text */
   color: transparent !important;
 }
@@ -222,9 +223,9 @@ header [data-testid="stLogoSpacer"] { display: none !important; }
 
 /* —— Typography —— */
 h1, h2, h3, .up-brand {
-  font-family: var(--up-font) !important;
-  font-weight: 800 !important;
-  letter-spacing: -0.03em;
+  font-family: var(--up-font-display) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.025em;
   color: var(--up-ink) !important;
 }
 h1 { font-size: clamp(1.85rem, 4vw, 2.35rem) !important; line-height: 1.15 !important; }
@@ -232,7 +233,7 @@ h2 { font-size: 1.45rem !important; margin-top: 0.25rem !important; }
 h3 { font-size: 1.15rem !important; }
 p, li, label, .stMarkdown, [data-testid="stCaption"] {
   font-size: 1rem;
-  line-height: 1.55;
+  line-height: 1.6;
 }
 [data-testid="stCaption"], .stCaption {
   color: var(--up-muted) !important;
@@ -250,8 +251,8 @@ p, li, label, .stMarkdown, [data-testid="stCaption"] {
   z-index: 1;
 }
 .up-topbrand .name {
-  font-family: var(--up-font);
-  font-weight: 800;
+  font-family: var(--up-font-display);
+  font-weight: 750;
   font-size: clamp(1.65rem, 3.8vw, 2.15rem);
   letter-spacing: -0.03em;
   color: var(--up-ink);
@@ -262,11 +263,11 @@ p, li, label, .stMarkdown, [data-testid="stCaption"] {
 }
 .up-topbrand .tag {
   font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--up-teal);
-  background: rgba(13, 148, 136, 0.12);
+  color: var(--up-accent);
+  background: var(--up-accent-soft);
   border-radius: 999px;
   padding: 0.22rem 0.55rem;
 }
@@ -278,7 +279,7 @@ p, li, label, .stMarkdown, [data-testid="stCaption"] {
   font-size: clamp(2.5rem, 6.5vw, 3.75rem) !important;
   line-height: 1.02 !important;
   margin: 0 0 1rem 0 !important;
-  font-weight: 800 !important;
+  font-weight: 750 !important;
 }
 .up-brand span {
   color: var(--up-accent);
@@ -301,10 +302,10 @@ p, li, label, .stMarkdown, [data-testid="stCaption"] {
 }
 .up-kicker {
   text-transform: uppercase;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--up-teal);
+  font-weight: 600;
+  color: var(--up-accent-2);
   margin-bottom: 0.55rem;
 }
 
@@ -315,8 +316,9 @@ p, li, label, .stMarkdown, [data-testid="stCaption"] {
   border-top: 1px solid var(--up-line);
 }
 .up-photon-title {
+  font-family: var(--up-font-display) !important;
   font-size: clamp(1.45rem, 2.4vw, 1.85rem) !important;
-  font-weight: 800 !important;
+  font-weight: 700 !important;
   letter-spacing: -0.02em;
   margin: 0 0 0.55rem 0 !important;
   color: var(--up-ink) !important;
@@ -330,15 +332,16 @@ p, li, label, .stMarkdown, [data-testid="stCaption"] {
 }
 .up-photon-number {
   margin: 0.35rem 0 0.45rem 0;
+  font-family: var(--up-font-display);
   font-size: clamp(1.85rem, 4.2vw, 2.55rem);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.15;
 }
 .up-photon-number a {
   color: var(--up-accent) !important;
   text-decoration: none !important;
-  border-bottom: 2px solid rgba(26, 115, 232, 0.25);
+  border-bottom: 2px solid rgba(79, 70, 229, 0.22);
 }
 .up-photon-number a:hover {
   border-bottom-color: var(--up-accent);
@@ -358,9 +361,9 @@ p, li, label, .stMarkdown, [data-testid="stCaption"] {
   padding: 1.15rem 1.35rem;
 }
 .up-dup {
-  border: 1px solid rgba(251, 188, 4, 0.35);
+  border: 1px solid rgba(217, 119, 6, 0.28);
   border-left: 4px solid var(--up-amber);
-  background: #FFF8E1;
+  background: #FFFBEB;
   border-radius: var(--up-radius-sm);
   padding: 1rem 1.15rem;
   margin: 0.75rem 0 1.25rem;
@@ -376,7 +379,7 @@ p, li, label, .stMarkdown, [data-testid="stCaption"] {
   padding: 0.35rem 0.15rem;
 }
 
-/* —— Colorful bubble buttons —— */
+/* —— Buttons: neutrals by default; saturated indigo only on primary CTAs —— */
 div.stButton > button,
 div.stDownloadButton > button,
 [data-testid="stBaseButton-secondary"],
@@ -387,78 +390,70 @@ div.stDownloadButton > button,
 [data-testid="stPageLink-NavLink"],
 a[data-testid="stPageLink-NavLink"] {
   border-radius: 999px !important;
-  font-weight: 700 !important;
+  font-weight: 600 !important;
   font-family: var(--up-font) !important;
-  transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease !important;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease !important;
   padding: 0.55rem 1.2rem !important;
 }
 div.stButton > button,
 div.stDownloadButton > button,
 [data-testid="stBaseButton-secondary"],
 [data-testid="baseButton-secondary"] {
-  border: none !important;
-  background: linear-gradient(135deg, #E8F0FE 0%, #DCF5F0 100%) !important;
-  color: #0B4F8A !important;
-  box-shadow:
-    0 0 0 5px rgba(26, 115, 232, 0.12),
-    0 6px 16px rgba(26, 115, 232, 0.16) !important;
+  border: 1px solid var(--up-line) !important;
+  background: var(--up-surface) !important;
+  color: var(--up-ink) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
 }
 div.stButton > button:hover {
   transform: translateY(-1px);
-  filter: brightness(1.03);
-  box-shadow:
-    0 0 0 6px rgba(26, 115, 232, 0.18),
-    0 10px 22px rgba(26, 115, 232, 0.2) !important;
+  background: #F1F5F9 !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08) !important;
 }
+/* Strong saturated color reserved for primary actions */
 div.stButton > button[kind="primary"],
 div.stButton > button[data-testid="baseButton-primary"],
 [data-testid="stBaseButton-primary"] {
-  background: linear-gradient(135deg, #1A73E8 0%, #0D9488 100%) !important;
+  background: var(--up-accent) !important;
   color: #fff !important;
   border: none !important;
-  box-shadow:
-    0 0 0 5px rgba(13, 148, 136, 0.16),
-    0 8px 20px rgba(26, 115, 232, 0.28) !important;
+  box-shadow: 0 6px 16px rgba(79, 70, 229, 0.28) !important;
 }
 div.stButton > button[kind="primary"]:hover,
 div.stButton > button[data-testid="baseButton-primary"]:hover {
-  background: linear-gradient(135deg, #1557B0 0%, #0F766E 100%) !important;
+  background: #4338CA !important;
   color: #fff !important;
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.34) !important;
 }
 [data-testid="stLinkButton"] a {
-  background: linear-gradient(135deg, #EDE9FE 0%, #E0F2FE 100%) !important;
-  color: #5B21B6 !important;
-  border: none !important;
-  box-shadow:
-    0 0 0 5px rgba(124, 58, 237, 0.12),
-    0 6px 16px rgba(124, 58, 237, 0.14) !important;
+  background: var(--up-surface) !important;
+  color: var(--up-ink) !important;
+  border: 1px solid var(--up-line) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
 }
 
-/* Home action page links — colorful bubbles */
+/* Home action page links — quiet neutrals, light primary tint only */
 [data-testid="stPageLink-NavLink"],
 a[data-testid="stPageLink-NavLink"] {
-  background: #fff !important;
-  border: none !important;
+  background: var(--up-surface) !important;
+  border: 1px solid var(--up-line) !important;
   margin: 0.25rem 0 !important;
-  box-shadow:
-    0 0 0 5px rgba(26, 115, 232, 0.12),
-    0 8px 18px rgba(18, 38, 58, 0.08) !important;
+  color: var(--up-ink) !important;
+  box-shadow: var(--up-shadow) !important;
 }
-div[data-testid="column"]:nth-child(1) [data-testid="stPageLink-NavLink"] {
-  box-shadow: 0 0 0 5px rgba(26, 115, 232, 0.18), 0 8px 18px rgba(26, 115, 232, 0.14) !important;
-  background: linear-gradient(180deg, #FFFFFF 0%, #E8F0FE 100%) !important;
-}
-div[data-testid="column"]:nth-child(2) [data-testid="stPageLink-NavLink"] {
-  box-shadow: 0 0 0 5px rgba(13, 148, 136, 0.18), 0 8px 18px rgba(13, 148, 136, 0.14) !important;
-  background: linear-gradient(180deg, #FFFFFF 0%, #CCFBF1 100%) !important;
-}
-div[data-testid="column"]:nth-child(3) [data-testid="stPageLink-NavLink"] {
-  box-shadow: 0 0 0 5px rgba(251, 188, 4, 0.22), 0 8px 18px rgba(251, 188, 4, 0.16) !important;
-  background: linear-gradient(180deg, #FFFFFF 0%, #FFF7D6 100%) !important;
-}
+div[data-testid="column"]:nth-child(1) [data-testid="stPageLink-NavLink"],
+div[data-testid="column"]:nth-child(2) [data-testid="stPageLink-NavLink"],
+div[data-testid="column"]:nth-child(3) [data-testid="stPageLink-NavLink"],
 div[data-testid="column"]:nth-child(4) [data-testid="stPageLink-NavLink"] {
-  box-shadow: 0 0 0 5px rgba(124, 58, 237, 0.16), 0 8px 18px rgba(124, 58, 237, 0.14) !important;
-  background: linear-gradient(180deg, #FFFFFF 0%, #EDE9FE 100%) !important;
+  background: var(--up-surface) !important;
+  box-shadow: var(--up-shadow) !important;
+}
+div[data-testid="column"]:nth-child(1) [data-testid="stPageLink-NavLink"]:hover,
+div[data-testid="column"]:nth-child(2) [data-testid="stPageLink-NavLink"]:hover,
+div[data-testid="column"]:nth-child(3) [data-testid="stPageLink-NavLink"]:hover,
+div[data-testid="column"]:nth-child(4) [data-testid="stPageLink-NavLink"]:hover {
+  border-color: rgba(79, 70, 229, 0.35) !important;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1), var(--up-shadow) !important;
 }
 
 /* —— Inputs —— */
@@ -476,11 +471,11 @@ div[data-testid="column"]:nth-child(4) [data-testid="stPageLink-NavLink"] {
 [data-testid="stTextArea"] textarea:focus,
 [data-testid="stNumberInput"] input:focus {
   border-color: var(--up-accent) !important;
-  box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.2) !important;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.18) !important;
 }
 [data-testid="stFileUploader"] section {
   border-radius: var(--up-radius) !important;
-  border: 1px dashed rgba(26, 115, 232, 0.35) !important;
+  border: 1px dashed rgba(15, 23, 42, 0.18) !important;
   background: var(--up-surface) !important;
 }
 [data-testid="stSlider"] [data-baseweb="slider"] div[role="slider"] {
@@ -496,7 +491,7 @@ div[data-testid="column"]:nth-child(4) [data-testid="stPageLink-NavLink"] {
   padding: 0.85rem 1rem;
 }
 [data-testid="stMetricValue"] {
-  font-family: var(--up-font) !important;
+  font-family: var(--up-font-display) !important;
   font-weight: 700 !important;
   color: var(--up-ink) !important;
 }
@@ -607,7 +602,7 @@ def chart_colors() -> dict[str, str]:
         "muted": STATUS_MUTED,
         "low": STATUS_GREEN,
         "medium": STATUS_AMBER,
-        "high": "#F57C00",
+        "high": "#EA580C",
         "critical": STATUS_CORAL,
         "resolved": STATUS_MUTED,
     }

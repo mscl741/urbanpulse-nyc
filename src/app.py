@@ -438,7 +438,7 @@ def render_ticket(
     st.markdown(
         f"<div class='up-panel'><h3 style='margin:0'>Dispatch · "
         f"{ticket.hazard_type.title()}{saved}</h3>"
-        f"<p style='margin:0.4rem 0 0;color:#3a4050'>{location}</p></div>",
+        f"<p style='margin:0.4rem 0 0;color:#475569'>{location}</p></div>",
         unsafe_allow_html=True,
     )
     c1, c2, c3, c4 = st.columns(4)
