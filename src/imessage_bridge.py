@@ -5,6 +5,8 @@ Does not change the Streamlit website. Reuses scan_nearby_hazards and Hazard Hel
 
 from __future__ import annotations
 
+import base64
+import io
 import json
 import os
 import sys
@@ -20,15 +22,28 @@ from dotenv import load_dotenv
 load_dotenv(ROOT.parent / ".env")
 
 from ai_provider import get_provider  # noqa: E402
-from db import ensure_db, get_ticket, save_ticket  # noqa: E402
+from db import (  # noqa: E402
+    attach_image,
+    ensure_db,
+    find_open_by_hash,
+    get_ticket,
+    nearby_open_reports,
+    save_ticket,
+)
 from flood_risk import neighborhood_hint_coords  # noqa: E402
 from geo_alerts import scan_nearby_hazards  # noqa: E402
 from geo_services import forward_geocode  # noqa: E402
 from grok_client import classify_text_report  # noqa: E402
+from media import image_sha256, read_image_bytes, save_report_image  # noqa: E402
 from nasa_weather import weather_context_for_point  # noqa: E402
 from nyc_areas import NYC_BOROUGHS  # noqa: E402
 from safety_profile import load_profile  # noqa: E402
-from vision_router import chat_routed  # noqa: E402
+from vision_router import analyze_hazard_routed, chat_routed, check_duplicate_routed  # noqa: E402
+
+try:
+    from PIL import Image
+except Exception:  # pragma: no cover
+    Image = None  # type: ignore[assignment,misc]
 
 HOST = os.getenv("URBANPULSE_BRIDGE_HOST", "127.0.0.1")
 PORT = int(os.getenv("URBANPULSE_BRIDGE_PORT", "8766"))
@@ -165,6 +180,161 @@ def file_text_report(text: str) -> str:
     )
 
 
+def _coords_for(location: str) -> tuple[float, float] | None:
+    point = forward_geocode(location)
+    if point:
+        return float(point["latitude"]), float(point["longitude"])
+    pin = resolve_pin(location)
+    if pin:
+        return pin[1], pin[2]
+    return None
+
+
+def location_from_caption(text: str) -> str | None:
+    extracted = extract_report_location(text)
+    if extracted:
+        return extracted
+    caption = text.strip().strip(".")
+    if not caption:
+        return None
+    if _coords_for(caption):
+        return caption
+    return None
+
+
+def _prepare_image(image_bytes: bytes, mime: str) -> tuple[bytes, str]:
+    normalized = (mime or "image/jpeg").split(";", 1)[0].strip().lower()
+    if normalized == "image/jpg":
+        normalized = "image/jpeg"
+    if normalized in {"image/jpeg", "image/png", "image/webp"}:
+        return image_bytes, normalized
+    if Image is None:
+        raise ValueError("unsupported image type")
+    with Image.open(io.BytesIO(image_bytes)) as img:
+        rgb = img.convert("RGB")
+        buf = io.BytesIO()
+        rgb.save(buf, format="JPEG")
+    return buf.getvalue(), "image/jpeg"
+
+
+def _matching_open_report(
+    image_bytes: bytes,
+    location: str,
+    lat: float | None,
+    lon: float | None,
+    *,
+    mime: str,
+) -> dict | None:
+    """Same checks as the Report page: photo hash, then nearby vision duplicate."""
+    digest = image_sha256(image_bytes)
+    by_hash = find_open_by_hash(digest)
+    if by_hash:
+        return by_hash
+    if lat is None or lon is None:
+        return None
+    use_mock = not _has_live_key()
+    model = os.getenv("GROK_MODEL") or "grok-4.7"
+    provider = get_provider()
+    for cand in nearby_open_reports(lat, lon, radius_m=120.0, limit=6):
+        existing = read_image_bytes(cand.get("image_path"))
+        if not existing:
+            continue
+        try:
+            verdict = check_duplicate_routed(
+                image_bytes,
+                existing,
+                location,
+                cand.get("summary") or cand.get("hazard_type") or "",
+                provider=provider,
+                mime=mime,
+                use_mock=use_mock,
+                model=model,
+                new_hash=digest,
+                existing_hash=cand.get("image_hash"),
+            )
+        except Exception:
+            continue
+        if verdict.is_same_issue and verdict.confidence >= 0.65:
+            return cand
+    return None
+
+
+def file_photo_report(
+    text: str,
+    image_bytes: bytes,
+    *,
+    mime: str,
+    filename: str | None,
+) -> str:
+    """Photo path used by Hazard Helper: vision router, then save_ticket and attach_image."""
+    location = location_from_caption(text)
+    if not location:
+        return (
+            "Send the photo with a location in the same message. "
+            "For example: This is at Broadway and W 116th St."
+        )
+    coords = _coords_for(location)
+    if coords is None:
+        return (
+            f'I couldn\'t place "{location}" on the NYC map. '
+            "Include a street, like Broadway and W 116th St."
+        )
+    lat, lon = coords
+    try:
+        image_bytes, mime = _prepare_image(image_bytes, mime)
+    except Exception:
+        return "I couldn't read that photo. Send a JPEG or PNG."
+
+    duplicate = _matching_open_report(image_bytes, location, lat, lon, mime=mime)
+    if duplicate:
+        return (
+            f"Already filed as report #{duplicate['id']}: "
+            f"{duplicate.get('hazard_type') or 'hazard'} at {duplicate.get('location') or location}. "
+            "No new report was created."
+        )
+
+    use_mock = not _has_live_key()
+    provider = get_provider()
+    model = os.getenv("GROK_MODEL") or "grok-4.7"
+    weather_ctx = weather_context_for_point(lat, lon) or None
+    try:
+        ticket = analyze_hazard_routed(
+            image_bytes,
+            location,
+            provider=provider,
+            mime=mime,
+            model=model,
+            use_mock=use_mock,
+            filename=filename,
+            weather_context=weather_ctx,
+        )
+    except Exception:
+        return "I couldn't review that photo just now. Please try again in a moment."
+
+    if not ticket.is_recognized_hazard():
+        return (
+            "No civic hazard recognized in that photo, so nothing was filed. "
+            f"{ticket.summary}"
+        )
+
+    digest = image_sha256(image_bytes)
+    report_id = save_ticket(
+        ticket,
+        location,
+        latitude=lat,
+        longitude=lon,
+        source="mock" if use_mock else "imessage",
+        image_hash=digest,
+        status="open",
+    )
+    path = save_report_image(report_id, image_bytes, mime=mime)
+    attach_image(report_id, path, digest)
+    return (
+        f"Filed report #{report_id}: {ticket.hazard_type} at {location}. "
+        f"Severity {ticket.severity.value}."
+    )
+
+
 def _wants_nearby(text: str) -> bool:
     low = f" {text.lower()} "
     markers = (
@@ -244,10 +414,21 @@ class Handler(BaseHTTPRequestHandler):
         try:
             payload = json.loads(raw.decode("utf-8"))
             text = str(payload.get("text") or "")
+            image_b64 = payload.get("image_base64")
+            mime = str(payload.get("mime") or "image/jpeg")
+            filename = str(payload.get("filename") or "hazard.jpg")
         except Exception:
             self.send_error(400)
             return
-        reply = handle_text(text)
+        if image_b64:
+            try:
+                image_bytes = base64.b64decode(image_b64)
+            except Exception:
+                self.send_error(400)
+                return
+            reply = file_photo_report(text, image_bytes, mime=mime, filename=filename)
+        else:
+            reply = handle_text(text)
         data = json.dumps({"reply": reply}).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
