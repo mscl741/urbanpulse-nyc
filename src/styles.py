@@ -205,9 +205,78 @@ section.main > div {
 }
 
 /* —— Top navigation —— */
+/* Desktop: pages live in the header. On mobile Streamlit moves them into the
+   sidebar — so we must NOT hide stSidebarNav on narrow screens. */
 [data-testid="stSidebarNav"] { display: none !important; }
+@media (max-width: 768px) {
+  [data-testid="stSidebarNav"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.35rem !important;
+    padding: 0.5rem 0.75rem 1rem !important;
+    border-bottom: 1px solid var(--up-line) !important;
+    margin-bottom: 0.75rem !important;
+  }
+  [data-testid="stSidebarNav"] a,
+  [data-testid="stSidebarNav"] [data-testid="stPageLink-NavLink"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    font-family: var(--up-font) !important;
+    font-weight: 600 !important;
+    color: var(--up-ink) !important;
+    border-radius: 999px !important;
+    padding: 0.45rem 0.75rem !important;
+  }
+}
 [data-testid="stHeader"] [data-testid="stToolbarActions"],
 header [data-testid="stLogoSpacer"] { display: none !important; }
+
+/* Keep header page links visible + scrollable when top nav is shown */
+header[data-testid="stHeader"] nav,
+[data-testid="stHeader"] [data-testid="stToolbar"] {
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap: nowrap !important;
+  max-width: 100% !important;
+}
+[data-testid="stHeader"] a,
+[data-testid="stHeader"] [data-testid="stPageLink-NavLink"] {
+  flex-shrink: 0 !important;
+  white-space: nowrap !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  color: var(--up-ink) !important;
+  font-family: var(--up-font) !important;
+  font-weight: 600 !important;
+  font-size: 0.92rem !important;
+}
+
+/* In-page page switcher — reliable on phones (top nav relocates to sidebar) */
+.up-mnav {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--up-faint);
+  margin: 0 0 0.35rem 0;
+}
+div[data-testid="stVerticalBlock"] > div:has(.up-mnav) + div[data-testid="stHorizontalBlock"] {
+  margin-bottom: 0.85rem !important;
+  gap: 0.35rem !important;
+}
+div[data-testid="stVerticalBlock"] > div:has(.up-mnav) + div[data-testid="stHorizontalBlock"] a[data-testid="stPageLink-NavLink"] {
+  font-size: 0.8rem !important;
+  padding: 0.45rem 0.4rem !important;
+  justify-content: center !important;
+  text-align: center !important;
+  background: var(--up-surface) !important;
+  border: 1px solid var(--up-line) !important;
+  border-radius: 999px !important;
+  box-shadow: none !important;
+  color: var(--up-ink) !important;
+}
 
 /* Sidebar = accessibility controls only */
 [data-testid="stSidebar"] {

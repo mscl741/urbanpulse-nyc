@@ -102,6 +102,7 @@ def _boot() -> None:
         """,
         unsafe_allow_html=True,
     )
+    _page_switcher()
     try:
         if "_db_bootstrapped" not in st.session_state:
             init_db()
@@ -109,6 +110,27 @@ def _boot() -> None:
     except Exception as exc:  # noqa: BLE001
         st.sidebar.error(f"DB init failed: {exc}")
 
+
+def _page_switcher() -> None:
+    """In-page page links — Streamlit moves top nav into the sidebar on phones."""
+    # page_* objects are defined at module import time before any page runs.
+    items = [
+        (page_home, "Home", "🏠"),
+        (page_report, "Report", "📷"),
+        (page_map, "Live map", "🗺️"),
+        (page_safety, "Near-me", "♿"),
+        (page_bot, "Helper", "🛟"),
+    ]
+    if os.getenv("SHOW_OPS", "").strip().lower() in {"1", "true", "yes"}:
+        items.append((page_ops, "Ops", "📊"))
+    st.markdown(
+        '<div class="up-mnav" aria-label="Page navigation">Pages</div>',
+        unsafe_allow_html=True,
+    )
+    cols = st.columns(len(items))
+    for col, (page, label, icon) in zip(cols, items):
+        with col:
+            st.page_link(page, label=label, icon=icon, use_container_width=True)
 
 def settings_rail() -> tuple[bool, str]:
     """Sidebar: accessibility controls only (pages live in the top nav)."""
