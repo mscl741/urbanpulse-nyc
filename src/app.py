@@ -778,12 +778,29 @@ def render_map() -> None:
     )
 
     show_resolved = st.toggle("Include resolved (ghost pins)", value=False)
-    rows = map_tickets(include_resolved=show_resolved)
+    try:
+        rows = map_tickets(include_resolved=show_resolved)
+    except Exception:
+        # Heal missing columns (e.g. affected_radius_m) then retry once.
+        from db import ensure_db  # local import — already on path
+
+        ensure_db()
+        try:
+            rows = map_tickets(include_resolved=show_resolved)
+        except Exception as exc:  # noqa: BLE001
+            st.error(
+                "Could not load map pins from the database. "
+                f"Refresh once after deploy if this persists. ({type(exc).__name__})"
+            )
+            return
     if not rows:
         st.info("No pinned reports yet. File one from Report (with a location pin).")
         return
 
-    render_incident_map(rows, height=560)
+    try:
+        render_incident_map(rows, height=560)
+    except Exception as exc:  # noqa: BLE001
+        st.warning(f"Map renderer hiccuped ({type(exc).__name__}). Pin list still works below.")
 
     focus = st.session_state.get("focus_report_id")
     labels = [
@@ -803,8 +820,9 @@ def render_map() -> None:
     left, right = st.columns([1.1, 1])
     with left:
         st.markdown(f"### #{detail['id']} · {str(detail.get('hazard_type','')).title()}")
+        sev = str(detail.get("severity") or "unknown").upper()
         st.write(
-            f"**{detail.get('severity','').upper()}** · {detail.get('agency')} · "
+            f"**{sev}** · {detail.get('agency')} · "
             f"{detail.get('status')} · filed {detail.get('created_at')}"
         )
         st.write(detail.get("summary") or "")
@@ -1405,12 +1423,12 @@ def render_ops() -> None:
         )
 
 
-page_home = st.Page(render_home, title="Home", icon="🏠", default=True)
-page_report = st.Page(render_report, title="Report", icon="📷")
-page_map = st.Page(render_map, title="Live map", icon="🗺️")
-page_safety = st.Page(render_safety, title="Near-me & safety", icon="♿")
-page_bot = st.Page(render_grokbot, title="Hazard Helper", icon="🛟")
-page_ops = st.Page(render_ops, title="Ops", icon="📊")
+page_home = st.Page(render_home, title="Home", icon="🏠", default=True, url_path="home")
+page_report = st.Page(render_report, title="Report", icon="📷", url_path="report")
+page_map = st.Page(render_map, title="Live map", icon="🗺️", url_path="live-map")
+page_safety = st.Page(render_safety, title="Near-me & safety", icon="♿", url_path="near-me")
+page_bot = st.Page(render_grokbot, title="Hazard Helper", icon="🛟", url_path="helper")
+page_ops = st.Page(render_ops, title="Ops", icon="📊", url_path="ops")
 
 
 def main() -> None:

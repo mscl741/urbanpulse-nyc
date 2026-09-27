@@ -202,6 +202,12 @@ def init_db() -> dict[str, Any]:
 
 
 def _migrate_columns(engine: Engine) -> None:
+    """Add missing columns one statement / transaction at a time.
+
+    Postgres aborts the whole transaction after the first failed ALTER (e.g. column
+    already exists). Bundling all ALTERs in one begin() silently skipped newer
+    columns like affected_radius_m — which crashed Live map.
+    """
     stmts = [
         "ALTER TABLE hazard_reports ADD COLUMN email_status VARCHAR(40)",
         "ALTER TABLE hazard_reports ADD COLUMN email_to VARCHAR(255)",
@@ -212,14 +218,38 @@ def _migrate_columns(engine: Engine) -> None:
         "ALTER TABLE hazard_reports ADD COLUMN resolved_at TIMESTAMP",
         "ALTER TABLE hazard_reports ADD COLUMN affected_radius_m FLOAT",
     ]
-    with engine.begin() as conn:
-        for sql in stmts:
-            try:
-                conn.execute(text(sql))
-            except Exception:
-                pass
+    for sql in stmts:
         try:
+            with engine.begin() as conn:
+                conn.execute(text(sql))
+        except Exception:
+            pass
+    try:
+        with engine.begin() as conn:
             conn.execute(text("UPDATE hazard_reports SET status = 'open' WHERE status IS NULL"))
+    except Exception:
+        pass
+    # Explicit Postgres guard — Timescale / older deploys may still lack the column.
+    if is_postgres():
+        try:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        """
+                        DO $$
+                        BEGIN
+                          IF NOT EXISTS (
+                            SELECT 1 FROM information_schema.columns
+                            WHERE table_name = 'hazard_reports'
+                              AND column_name = 'affected_radius_m'
+                          ) THEN
+                            ALTER TABLE hazard_reports
+                              ADD COLUMN affected_radius_m DOUBLE PRECISION;
+                          END IF;
+                        END $$;
+                        """
+                    )
+                )
         except Exception:
             pass
 
@@ -227,6 +257,11 @@ def _migrate_columns(engine: Engine) -> None:
 def ensure_db() -> dict[str, Any]:
     if not _initialized:
         return init_db()
+    # Re-run cheap column migrations so new deploys heal live Postgres schemas.
+    try:
+        _migrate_columns(get_engine())
+    except Exception:
+        pass
     return {
         "url_scheme": database_url().split("://", 1)[0],
         "backend": "postgres" if is_postgres() else "sqlite",
