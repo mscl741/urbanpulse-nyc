@@ -205,6 +205,43 @@ def check_duplicate_issue(
         raise ValueError(f"Grok duplicate check failed: {exc}\nRaw: {raw}") from exc
 
 
+def classify_text_report(
+    description: str,
+    location: str,
+    *,
+    model: str | None = None,
+    use_mock: bool = False,
+) -> DispatchTicket:
+    """Same DispatchTicket contract as photo classification, for a text report."""
+    if use_mock:
+        return mock_analyze(location, description)
+
+    model_name = model or os.getenv("GROK_MODEL", "grok-4.7")
+    client = _client()
+    response = client.chat.completions.create(
+        model=model_name,
+        temperature=0.2,
+        response_format={"type": "json_object"},
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": (
+                    f"Intersection / location: {location}\n"
+                    f"Resident text report (no photo): {description}\n"
+                    "Classify this urban hazard into the required JSON. "
+                    "Any civic hazard type is valid."
+                ),
+            },
+        ],
+    )
+    raw = response.choices[0].message.content or "{}"
+    try:
+        return DispatchTicket.model_validate(json.loads(raw))
+    except (json.JSONDecodeError, ValidationError) as exc:
+        raise ValueError(f"Grok returned invalid ticket JSON: {exc}\nRaw: {raw}") from exc
+
+
 def analyze_image_path(path: Path, location: str, **kwargs) -> DispatchTicket:
     mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
     return analyze_hazard(path.read_bytes(), location, mime=mime, filename=path.name, **kwargs)

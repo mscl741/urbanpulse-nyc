@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
 
 import requests
@@ -84,6 +85,113 @@ def reverse_geocode(lat: float, lon: float) -> dict[str, Any]:
         }
     _GEOCODE_CACHE[cache_key] = result
     return result
+
+
+def _in_nyc(lat: float, lon: float) -> bool:
+    return 40.49 <= lat <= 40.92 and -74.27 <= lon <= -73.68
+
+
+def _nominatim_search_one(query: str) -> dict[str, Any] | None:
+    try:
+        resp = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"q": query, "format": "json", "limit": 1},
+            headers={"User-Agent": USER_AGENT},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        rows = resp.json()
+    except Exception:
+        return None
+    if not rows:
+        return None
+    top = rows[0]
+    try:
+        lat = float(top["lat"])
+        lon = float(top["lon"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if not _in_nyc(lat, lon):
+        return None
+    return {
+        "latitude": lat,
+        "longitude": lon,
+        "label": top.get("display_name") or query,
+        "provider": "nominatim",
+    }
+
+
+def forward_geocode(query: str) -> dict[str, Any] | None:
+    """Point for a street or intersection so a text report can be pinned.
+
+    Uses Google when GOOGLE_MAPS_API_KEY is set. Otherwise Nominatim.
+    Intersection queries often miss; a numbered cross street in NYC is preferred.
+    """
+    text = " ".join(query.replace("&", " and ").split())
+    if not text:
+        return None
+
+    key = google_maps_api_key()
+    if key:
+        try:
+            resp = requests.get(
+                GOOGLE_GEOCODE_URL,
+                params={"address": f"{text}, New York, NY", "key": key},
+                timeout=4,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("status") == "OK" and data.get("results"):
+                loc = data["results"][0]["geometry"]["location"]
+                lat, lon = float(loc["lat"]), float(loc["lng"])
+                if _in_nyc(lat, lon):
+                    return {
+                        "latitude": lat,
+                        "longitude": lon,
+                        "label": data["results"][0].get("formatted_address") or text,
+                        "provider": "google",
+                    }
+        except Exception:
+            pass
+
+    expanded = (
+        text.replace(" W ", " West ")
+        .replace(" E ", " East ")
+        .replace(" St", " Street")
+        .replace(" Ave", " Avenue")
+        .replace(" Blvd", " Boulevard")
+    )
+    variants = [f"{text}, New York, NY", f"{expanded}, New York, NY"]
+    for piece in re.split(r"\s+and\s+", expanded, flags=re.IGNORECASE):
+        piece = piece.strip(" .")
+        if len(piece) >= 4:
+            variants.append(f"{piece}, Manhattan, New York")
+            variants.append(f"{piece}, New York, NY")
+
+    hits: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for variant in variants:
+        if variant in seen:
+            continue
+        seen.add(variant)
+        hit = _nominatim_search_one(variant)
+        if hit:
+            hits.append(hit)
+        if len(seen) >= 6:
+            break
+    if not hits:
+        return None
+
+    def score(hit: dict[str, Any]) -> int:
+        label = str(hit.get("label") or "").lower()
+        total = 0
+        for token in re.findall(r"[a-z0-9]+", text.lower()):
+            if len(token) < 2 or token not in label:
+                continue
+            total += 5 if any(ch.isdigit() for ch in token) else 1
+        return total
+
+    return max(hits, key=score)
 
 
 def fast_location_choices(lat: float, lon: float) -> tuple[list[str], str | None]:
